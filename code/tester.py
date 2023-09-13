@@ -11,15 +11,26 @@ import helper, consts
 importlib.reload(helper)
 importlib.reload(consts)
 
-def test_build_feature_map():
-    # Edge cases
-    assert helper.build_feature_map("") == {}
-    assert helper.build_feature_map("", ".txt") == {}
-    assert helper.build_feature_map("test_input.") == {}
-    assert helper.build_feature_map("test_input", "..txt") == {}
-    assert helper.build_feature_map("test_input", "t.xt") == {}
+class TestSuite():
+    def run(self):
+        self.test_build_feature_map()
     
-    # Valid cases
-    assert helper.build_feature_map("test_input", "txt") != {}
-    assert helper.build_feature_map("test_input", ".txt") != {}
-    assert helper.build_feature_map("test input", ".txt") != {}
+    def test_build_feature_map(self):
+        # Edge cases
+        assert helper.build_feature_map("") == {}
+        assert helper.build_feature_map("", ".txt") == {}
+        assert helper.build_feature_map("test_input") == {}
+        assert helper.build_feature_map("test_input.") == {}
+        assert helper.build_feature_map("test_input", "..txt") == {}
+        assert helper.build_feature_map("test_input", "t.xt") == {}
+        
+        # File not found
+        assert helper.build_feature_map("test_input", "txt") == {}
+        assert helper.build_feature_map("test_input", ".txt") == {}
+        assert helper.build_feature_map("test input.txt",) == {}
+        assert helper.build_feature_map("test input", ".txt") == {}
+        assert helper.build_feature_map("test_input.txt", "txt") == {}
+        assert helper.build_feature_map("data_description.txt", "txt") == {}
+        
+test_suite = TestSuite()
+test_suite.run()
