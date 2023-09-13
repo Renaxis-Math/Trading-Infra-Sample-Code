@@ -1,6 +1,7 @@
 asset characteristic - a variable that describes an relatively static variable that might determine the amount of reversal
 reverse vs trend differentiator - dynamic variables that might be useful for determining if a stock is reversing or trending
 predictor - a variable that should help predict the dependent variable by itself
+
 lst15 - last 15 minutes
 lsthrx15 - hour before now to 15 minutes before now
 toxhr - open to hour before now
@@ -11,37 +12,46 @@ pm - afternoon
 dy - all day
 open - at the open
 close - at the close
+
 open_x - value at open x days ago
 open_xtoy - sum of values at open days x-y ago 
+ 
 eqid - equity id that you use to match the data in different files.  each corresponds to one stock
 wt - weight for this eqid
+
 today - dependent variable from now to end of day
 tonight - dependent variable for close to open
 tmwam - dependent variable for open tomorrow morning to midday
 dn3sttmwmd - dependent variable for midday tomorrow for 3 additional days
 dn1 - dependent variable from now to now tomorrow
 dn4x1 - dependent variable from now tomorrow for 3 additional days 
+
 liqlog_open_0 - asset characteristic
 totrisklog_open_0 - asset characteristic
+
 cftorrrelstd_open_0 - reverse vs trend differentiator
 momr10d_open_0 - reverse vs trend differentiator
 momr50dx10d_open_0 - reverse vs trend differentiator
+
 qe_fwd1_open_0 - quarterly earning event in near future
 qe_nt0_open_0 - quarterly earning event last night
 qe_prv1_open_0 - quarterly earning event in last 24 hours before last night
 qe_prv2_open_0 - quarterly earning event in last 24 hours before night before last
+
 moorelvol_open_0 - market on open relative volume (reverse vs trend differentiator)
 moorelvol_open_1to3 - market on open relative volume (reverse vs trend differentiator)
 moorelvol_open_4to6 - market on open relative volume (reverse vs trend differentiator)
 moorelvol_open_7to11 - market on open relative volume (reverse vs trend differentiator)
 moorelvol_open_12to16 - market on open relative volume (reverse vs trend differentiator)
 moorelvol_open_17to21 - market on open relative volume (reverse vs trend differentiator)
+
 mocrelvol_open_1 - market on close relative volume (reverse vs trend differentiator)
 mocrelvol_open_2to4 - market on close relative volume (reverse vs trend differentiator)
 mocrelvol_open_5to7 - market on close relative volume (reverse vs trend differentiator)
 mocrelvol_open_8to12 - market on close relative volume (reverse vs trend differentiator)
 mocrelvol_open_13to17 - market on close relative volume (reverse vs trend differentiator)
 mocrelvol_open_18to22 - market on close relative volume (reverse vs trend differentiator)
+
 relntrds70tr_lst15_0 - relative number of trades (reverse vs trend differentiator)
 relntrds70tr_lsthrx15_0 - relative number of trades (reverse vs trend differentiator)
 relntrds70tr_toxhr_0 - relative number of trades (reverse vs trend differentiator)
@@ -60,6 +70,7 @@ relntrds70tr_dy_12to16 - relative number of trades (reverse vs trend differentia
 relntrds70tr_nt_12to16 - relative number of trades (reverse vs trend differentiator)
 relntrds70tr_dy_17to21 - relative number of trades (reverse vs trend differentiator)
 relntrds70tr_nt_17to21 - relative number of trades (reverse vs trend differentiator)
+
 relvol_lst15_0 - relative volume (reverse vs trend differentiator)
 relvol_lsthrx15_0 - relative volume (reverse vs trend differentiator)
 relvol_toxhr_0 - relative volume (reverse vs trend differentiator)
@@ -78,6 +89,7 @@ relvol_dy_12to16 - relative volume (reverse vs trend differentiator)
 relvol_nt_12to16 - relative volume (reverse vs trend differentiator)
 relvol_dy_17to21 - relative volume (reverse vs trend differentiator)
 relvol_nt_17to21 - relative volume (reverse vs trend differentiator)
+
 relavgts70tr_now_0 - relative average trade size 
 relavgts70tr_close_1 - relative average trade size 
 relavgts70tr_close_1to3 - relative average trade size 
@@ -85,6 +97,7 @@ relavgts70tr_close_4to6 - relative average trade size
 relavgts70tr_close_7to11 - relative average trade size 
 relavgts70tr_close_12to16 - relative average trade size 
 relavgts70tr_close_17to21 - relative average trade size 
+
 rel2retcfrtxm_lst15_0 - relative value of cf return vs market neutral return (reverse vs trend differentiator)
 rel2retcfrtxm_lsthrx15_0 - relative value of cf return vs market neutral return (reverse vs trend differentiator)
 rel2retcfrtxm_toxhr_0 - relative value of cf return vs market neutral return (reverse vs trend differentiator)
@@ -103,6 +116,7 @@ rel2retcfrtxm_dy_12to16 - relative value of cf return vs market neutral return (
 rel2retcfrtxm_nt_12to16 - relative value of cf return vs market neutral return (reverse vs trend differentiator)
 rel2retcfrtxm_dy_17to21 - relative value of cf return vs market neutral return (reverse vs trend differentiator)
 rel2retcfrtxm_nt_17to21 - relative value of cf return vs market neutral return (reverse vs trend differentiator)
+
 rrretstr_lst15_0 - relative strength of residual return relative to normal (reverse vs trend differentiator)
 rrretstr_lsthrx15_0 - relative strength of residual return relative to normal (reverse vs trend differentiator)
 rrretstr_toxhr_0 - relative strength of residual return relative to normal (reverse vs trend differentiator)
@@ -121,6 +135,7 @@ rrretstr_dy_12to16 - relative strength of residual return relative to normal (re
 rrretstr_nt_12to16 - relative strength of residual return relative to normal (reverse vs trend differentiator)
 rrretstr_dy_17to21 - relative strength of residual return relative to normal (reverse vs trend differentiator)
 rrretstr_nt_17to21 - relative strength of residual return relative to normal (reverse vs trend differentiator)
+
 rvdelta_lst15_0 - change in relative volume (reverse vs trend differentiator)
 rvdelta_lsthrx15_0 - change in relative volume (reverse vs trend differentiator)
 rvdelta_toxhr_0 - change in relative volume (reverse vs trend differentiator)
@@ -139,6 +154,7 @@ rvdelta_dy_12to16 - change in relative volume (reverse vs trend differentiator)
 rvdelta_nt_12to16 - change in relative volume (reverse vs trend differentiator)
 rvdelta_dy_17to21 - change in relative volume (reverse vs trend differentiator)
 rvdelta_nt_17to21 - change in relative volume (reverse vs trend differentiator)
+
 rrirpnxm_lst15_0 - predictor residual return
 rrirpnxm_lsthrx15_0 - predictor residual return
 rrirpnxm_toxhr_0 - predictor residual return
@@ -157,6 +173,7 @@ rrirpnxm_dy_12to16 - predictor residual return
 rrirpnxm_nt_12to16 - predictor residual return
 rrirpnxm_dy_17to21 - predictor residual return
 rrirpnxm_nt_17to21 - predictor residual return
+
 llirpnxm_lst15_0 - predictor lead/lag return
 llirpnxm_lsthrx15_0 - predictor lead/lag return
 llirpnxm_toxhr_0 - predictor lead/lag return
@@ -175,6 +192,7 @@ llirpnxm_dy_12to16 - predictor lead/lag return
 llirpnxm_nt_12to16 - predictor lead/lag return
 llirpnxm_dy_17to21 - predictor lead/lag return
 llirpnxm_nt_17to21 - predictor lead/lag return
+
 tr_lst15_0 - predictor excess return when returns are very large 
 tr_lsthrx15_0 - predictor excess return when returns are very large
 tr_toxhr_0 - predictor excess return when returns are very large
@@ -193,6 +211,7 @@ tr_dy_12to16 - predictor excess return when returns are very large
 tr_nt_12to16 - predictor excess return when returns are very large
 tr_dy_17to21 - predictor excess return when returns are very large
 tr_nt_17to21 - predictor excess return when returns are very large
+
 nnetticksrelmultstdev_lst15_0 - predictor relative number of ticks at bid vs ask multiplied by stdev of the asset
 nnetticksrelmultstdev_lsthrx15_0 - predictor relative number of ticks at bid vs ask multiplied by stdev of the asset
 nnetticksrelmultstdev_toxhr_0 - predictor relative number of ticks at bid vs ask multiplied by stdev of the asset
@@ -211,6 +230,7 @@ nnetticksrelmultstdev_dy_12to16 - predictor relative number of ticks at bid vs a
 nnetticksrelmultstdev_nt_12to16 - predictor relative number of ticks at bid vs ask multiplied by stdev of the asset
 nnetticksrelmultstdev_dy_17to21 - predictor relative number of ticks at bid vs ask multiplied by stdev of the asset
 nnetticksrelmultstdev_nt_17to21 - predictor relative number of ticks at bid vs ask multiplied by stdev of the asset
+
 nnetticksrelrrsign_lst15_0 - predictor relative number of ticks at bid vs ask multiplied conditioned on sign of residual return
 nnetticksrelrrsign_lsthrx15_0 - predictor relative number of ticks at bid vs ask conditioned on sign of residual return
 nnetticksrelrrsign_toxhr_0 - predictor relative number of ticks at bid vs ask conditioned on sign of residual return
@@ -229,6 +249,7 @@ nnetticksrelrrsign_dy_12to16 - predictor relative number of ticks at bid vs ask 
 nnetticksrelrrsign_nt_12to16 - predictor relative number of ticks at bid vs ask conditioned on sign of residual return
 nnetticksrelrrsign_dy_17to21 - predictor relative number of ticks at bid vs ask conditioned on sign of residual return
 nnetticksrelrrsign_nt_17to21 - predictor relative number of ticks at bid vs ask conditioned on sign of residual return
+
 nsameticksrelmultstdev_lst15_0 - predictor relative number of ticks happening at mid multiplied by stdev of the asset
 nsameticksrelmultstdev_lsthrx15_0 - predictor relative number of ticks happening at mid multiplied by stdev of the asset
 nsameticksrelmultstdev_toxhr_0 - predictor relative number of ticks happening at mid multiplied by stdev of the asset
@@ -247,6 +268,7 @@ nsameticksrelmultstdev_dy_12to16 - predictor relative number of ticks happening 
 nsameticksrelmultstdev_nt_12to16 - predictor relative number of ticks happening at mid multiplied by stdev of the asset
 nsameticksrelmultstdev_dy_17to21 - predictor relative number of ticks happening at mid multiplied by stdev of the asset
 nsameticksrelmultstdev_nt_17to21 - predictor relative number of ticks happening at mid multiplied by stdev of the asset
+
 nsameticksrelrrsign_lst15_0 - predictor relative number of ticks happening at mid conditioned on sign of residual return
 nsameticksrelrrsign_lsthrx15_0 - predictor relative number of ticks happening at mid conditioned on sign of residual return
 nsameticksrelrrsign_toxhr_0 - predictor relative number of ticks happening at mid conditioned on sign of residual return
@@ -265,3 +287,4 @@ nsameticksrelrrsign_dy_12to16 - predictor relative number of ticks happening at 
 nsameticksrelrrsign_nt_12to16 - predictor relative number of ticks happening at mid conditioned on sign of residual return
 nsameticksrelrrsign_dy_17to21 - predictor relative number of ticks happening at mid conditioned on sign of residual return
 nsameticksrelrrsign_nt_17to21 - predictor relative number of ticks happening at mid conditioned on sign of residual return
+
