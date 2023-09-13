@@ -4,8 +4,8 @@
 import importlib
 import helper, consts
 
-reload(helper)
-reload(consts)
+importlib.reload(helper)
+importlib.reload(consts)
 
 def test_build_feature_map():
     pass
