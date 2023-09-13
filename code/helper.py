@@ -1,9 +1,13 @@
 # This file contains all helper functions
 # to be used in all files in the project.
 
+import importlib
+import re
 import consts
 
-def build_feature_map(filename: str, no_dot_filetype: str = None):
+importlib.reload(consts)
+
+def build_feature_map(filename: str, filetype: str = None) -> dict[str, str]:
     """Return a feature_name_str -> feature_description_str map,
     given that each line in the input file 'filename' has this format:
     
@@ -11,30 +15,36 @@ def build_feature_map(filename: str, no_dot_filetype: str = None):
 
     Args:
         filename (str): the filename you want to use. Must specify file type
-        either in 'filename' or 'no_dot_filetype'
+        either in 'filename' or 'filetype'
         
-        no_dot_filetype (str): a string of file type WITHOUT DOTS.
+        filetype (str): a string of file type WITHOUT DOTS.
     """
     
-    # Edge cases
-    if ('.' not in filename) and (not no_dot_filetype):
-        raise Exception(f"Returned Empty. {filename} is not a valid file name, and file type is {no_dot_filetype}")
+    # Edge cases...
+    if (not filename) or ((not re.match(r'.+\.+.+', filename)) and (not filetype)):
+        print(f"Returned Empty. '{filename}' is not a valid file name")
         return {}
     
-    if ('.' not in filename): # 'no_dot_filetype' isn't empty
-        if ('.' in no_dot_filetype):
-            raise Exception(f"Returned Empty. Please remove the dot in {no_dot_filetype}")
-            return {}
-        else:
-            filename = filename + '.' + no_dot_filetype
-
-    file_path = consts.DATA_PATH + filename
+    if filetype.count('.') > 1:
+        print(f"Returned Empty. Please remove to < 1 dot in {filetype}")
+        return {}
     
+    if filetype.find('.') > 0:
+        print(f"Return Empty. Please only place the '.' in {filetype}'s 1st position")
+        return {}
+    # ...Edge cases
+
+    # Build file path...
+    if (filetype[0] == '.'): filename = filename + filetype
+    else: filename = filename + '.' + filetype
+    file_path = consts.DATA_PATH + filename
+    # ...Build file path
+
     try:
         file = open(file_path, "r")
         lines = file.readlines()
         
-        # Build the feature_description_map
+        # Build the feature_description_map...
         answer = {}
         
         for line in lines:
@@ -47,6 +57,7 @@ def build_feature_map(filename: str, no_dot_filetype: str = None):
             if feature in answer:
                 print("Feature already in FEATURE_DESCRIPTION_MAP. Updating {feature} description instead...")
             answer[feature] = description
+        # ...Build the feature_description_map
         
         return answer
     
@@ -56,10 +67,8 @@ def build_feature_map(filename: str, no_dot_filetype: str = None):
     
     finally:
         file.close()
-# Local Constants
-FEATURE_DESCRIPTION_MAP = build_feature_map("data_description", "txt")
 
-def explain_all_features():
+def explain_all_features() -> None:
     """Generate a well-formatted, alphabetically ordered
     descriptions of all features in 'data_description.txt'
     """
@@ -71,7 +80,7 @@ def explain_all_features():
     
     return
 
-def explain_feature(feature_name: str = None):
+def explain_feature(feature_name: str = None) -> None:
     """Print the description of the feature 'feature_name'
     from our built feature map in consts.py
 
@@ -86,3 +95,6 @@ def explain_feature(feature_name: str = None):
     else: print(FEATURE_DESCRIPTION_MAP[feature_name])
     
     return
+
+# Local Constants
+FEATURE_DESCRIPTION_MAP = build_feature_map("data_description", "txt")
