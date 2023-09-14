@@ -1,6 +1,7 @@
 # This file contains all helper functions
 # to be used in all files in the project.
-
+import pandas as pd
+import numpy as np
 import importlib
 import re
 import consts
@@ -95,7 +96,7 @@ def explain_all_features() -> None:
 
 def explain_feature(feature_name: str = None) -> None:
     """Print the description of the feature 'feature_name'
-    from our built feature map in consts.py
+    from "data_description.txt"
 
     Args:
         feature_name (str, optional): the feature name you want. Defaults to None.
@@ -103,11 +104,65 @@ def explain_feature(feature_name: str = None) -> None:
     Returns:
         str: the description of the input feature
     """
-    if not feature_name: explain_all_features()
+    FILE_NAME = "data_description.txt"
+    FEATURE_DESCRIPTION_MAP = build_feature_map(FILE_NAME)
+    
+    if not feature_name: explain_all_features(FILE_NAME)
     elif feature_name not in FEATURE_DESCRIPTION_MAP: raise Exception(f"Feature '{feature_name}' not exists.")
     else: print(FEATURE_DESCRIPTION_MAP[feature_name])
     
     return
 
-# Local Constants
-FEATURE_DESCRIPTION_MAP = build_feature_map("data_description.txt")
+def shapiro_test(residuals) -> None:
+    """Perform a Shapiro test of whether a list of data is normally distributed
+    
+    Args:
+        residuals: a list-like object of similarly typed data
+    """
+    import scipy.stats as stats
+    
+    shapiro_test_statistic, shapiro_p_value = stats.shapiro(residuals)
+    alpha = 0.05  # Significance level
+    if shapiro_p_value > alpha: print(f"Shapiro-Wilk Test: Residuals normally distributed.")
+    else: print(f"Shapiro-Wilk Test: Residuals NOT normally distributed.")
+    
+    return
+
+def white_test(residuals, df) -> None:
+    """Perform a White test of heteroskedasticity 
+    for a simple linear regression model
+
+    Args:
+        df (DataFrame): the testing data (X)
+        residuals: a list-like object of similarly typed data
+    """
+    assert isinstance(df, pd.DataFrame), "2nd argument is not a DataFrame"
+    import statsmodels.api as sm
+
+    white_testing_df = sm.add_constant(df)
+    white_test = sm.stats.diagnostic.het_white(residuals, white_testing_df)
+    white_p_value = white_test[1]
+
+    alpha = 0.05 # Significant level
+    if white_p_value < alpha: print("White Test: Residuals have constant variance.")
+    else: print("White Test: Residuals DO NOT have constant variance.")
+    
+def bp_test(residuals, df) -> None:
+    """Perform a Breusch-Pagan test of heteroskedasticity 
+    for a multiple linear regression model
+
+    Args:
+        df (DataFrame): the testing data (X)
+        residuals: a list-like object of similarly typed data
+    """
+    assert isinstance(df, pd.DataFrame), "2nd argument is not a DataFrame"
+    import statsmodels.api as sm    
+    bp_testing_df = sm.add_constant(df)
+    bp_test = sm.OLS(residuals**2, bp_testing_df).fit()
+    bp_p_value = bp_test.pvalues[1]
+
+    alpha = 0.05 # Significant level
+    if bp_p_value < alpha: print("Breusch-Pagan Test: Residuals have constant variance.")
+    else: print("Breusch-Pagan Test: Residuals DO NOT have constant variance.")   
+    
+    return  
