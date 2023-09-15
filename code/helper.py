@@ -167,4 +167,19 @@ def bp_test(residuals, df) -> None:
     if bp_p_value < alpha: print(f"Breusch-Pagan Test: Residuals have constant variance.")
     else: print(f"Breusch-Pagan Test: Residuals DO NOT have constant variance.")   
     
-    return  
+    return
+
+def vif_test(r_squared: float):
+    """Perform a VIF test for multi-collinearity
+
+    Args:
+        r_squared (float): the r-squared value of a regression model.
+    """
+    vif = 1.0 / (1 - r_squared)
+
+    if vif < 1: print("This model performs worse than a horizontal line :(")
+    elif vif == 1: print("All predictors are independent :)")
+    elif 1 < vif < 5: print("Some dependent variables.")
+    else: print("Too many dependent predictors!") # vif >= 5
+
+    return 
