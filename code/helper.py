@@ -82,10 +82,11 @@ def build_feature_map(filename: str, filetype: str = None) -> dict[str, str]:
 
     return answer
 
-def explain_all_features() -> None:
+def explain_all_features(filename = "data_description.txt") -> None:
     """Generate a well-formatted, alphabetically ordered
     descriptions of all features in 'data_description.txt'
     """
+    FEATURE_DESCRIPTION_MAP = build_feature_map(filename)    
     alphabetically_sorted_features = sorted(FEATURE_DESCRIPTION_MAP.keys())
     
     for feature in alphabetically_sorted_features:
@@ -94,7 +95,7 @@ def explain_all_features() -> None:
     
     return
 
-def explain_feature(feature_name: str = None) -> None:
+def explain_feature(feature_name: str, filename = "data_description.txt") -> None:
     """Print the description of the feature 'feature_name'
     from "data_description.txt"
 
@@ -104,10 +105,9 @@ def explain_feature(feature_name: str = None) -> None:
     Returns:
         str: the description of the input feature
     """
-    FILE_NAME = "data_description.txt"
-    FEATURE_DESCRIPTION_MAP = build_feature_map(FILE_NAME)
+    FEATURE_DESCRIPTION_MAP = build_feature_map(filename)
     
-    if not feature_name: explain_all_features(FILE_NAME)
+    if not feature_name: explain_all_features(filename)
     elif feature_name not in FEATURE_DESCRIPTION_MAP: raise Exception(f"Feature '{feature_name}' not exists.")
     else: print(FEATURE_DESCRIPTION_MAP[feature_name])
     
@@ -144,8 +144,10 @@ def white_test(residuals, df) -> None:
     white_p_value = white_test[1]
 
     alpha = 0.05 # Significant level
-    if white_p_value < alpha: print("White Test: Residuals have constant variance.")
-    else: print("White Test: Residuals DO NOT have constant variance.")
+    if white_p_value < alpha: print(f"White Test: Residuals have constant variance.")
+    else: print(f"White Test: Residuals DO NOT have constant variance.")
+
+    return
     
 def bp_test(residuals, df) -> None:
     """Perform a Breusch-Pagan test of heteroskedasticity 
@@ -162,7 +164,7 @@ def bp_test(residuals, df) -> None:
     bp_p_value = bp_test.pvalues[1]
 
     alpha = 0.05 # Significant level
-    if bp_p_value < alpha: print("Breusch-Pagan Test: Residuals have constant variance.")
-    else: print("Breusch-Pagan Test: Residuals DO NOT have constant variance.")   
+    if bp_p_value < alpha: print(f"Breusch-Pagan Test: Residuals have constant variance.")
+    else: print(f"Breusch-Pagan Test: Residuals DO NOT have constant variance.")   
     
     return  
