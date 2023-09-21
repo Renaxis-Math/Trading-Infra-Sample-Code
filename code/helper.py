@@ -177,9 +177,9 @@ def vif_test(r_squared: float):
     """
     vif = 1.0 / (1 - r_squared)
 
-    if vif < 1: print("This model performs worse than a horizontal line :(")
-    elif vif == 1: print("All predictors are independent :)")
-    elif 1 < vif < 5: print("Some dependent variables.")
-    else: print("Too many dependent predictors!") # vif >= 5
+    if vif < 1: print(f"VIF = {vif}. This model performs worse than a horizontal line :(")
+    elif vif == 1: print(f"VIF = {vif}. All predictors are independent :)")
+    elif 1 < vif < 5: print(f"VIF = {vif}. Some dependent predictors exist.")
+    else: print(f"VIF = {vif}. Too many dependent predictors!") # vif >= 5
 
     return 
