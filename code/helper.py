@@ -182,4 +182,4 @@ def vif_test(r_squared: float):
     elif 1 < vif < 5: print(f"VIF = {vif}. Some dependent predictors exist.")
     else: print(f"VIF = {vif}. Too many dependent predictors!") # vif >= 5
 
-    return 
+    return
