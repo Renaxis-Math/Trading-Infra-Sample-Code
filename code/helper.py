@@ -14,16 +14,21 @@ class Regression():
         #TODO: Whenever you customize this, remember to add your method here!!!
         self.availableRegressionName_func_map = {
             'OLS': self.sklearn_ols_regression,
-            'LASSO': self.sklearn_LASSO_regression
+            'LASSO': self.sklearn_LASSO_regression,
+            'XGB' : self.xgboost_regression
         }
         
         self.betas = None # betas[-1] = intercept
         self.predicted_responses = None
         self.actual_responses = None
+        self.model = None
         
         assert regression_type.upper() in self.availableRegressionName_func_map, \
         print(f"Please select one of these existing methods:\n{self.list_all_regression_types()}")
         self.regression_type = regression_type.upper()
+    
+    def __repr__(self) -> str:
+        return f"{self.regression_type} Regression Model"
     
     @staticmethod
     def list_all_regression_types():
@@ -37,16 +42,24 @@ class Regression():
         
         model = LinearRegression(fit_intercept=False)
         model.fit(X=train_X, y=train_y, sample_weight=sample_weight)
-
-        return model.coef_ 
+        self.model = model
+        return model.coef_
     
     def sklearn_LASSO_regression(self, train_X, train_y, cv = 10):
         from sklearn.linear_model import LassoCV
         
         model = LassoCV(cv=cv, fit_intercept=False) # Higher cv, Lower bias
         model.fit(X=train_X, y=train_y)
-        
+        self.model = model
         return model.coef_     
+
+    def xgboost_regression(self, train_X, train_y, sample_weight = None):
+        from xgboost import XGBRegressor 
+
+        model = XGBRegressor("reg:squarederror", booster='gblinear')
+        model.fit(X=train_X, y=train_y)
+        self.model = model
+        return model.get_xgb_params()
     ### \Sklearn
     
     ### Private methods
@@ -59,12 +72,13 @@ class Regression():
         
         return (train_X, train_y, test_X, test_y)        
     
-    def __get_betas(self, train_X, train_y, sample_weight = None): #TODO: customize this!
-        regression_function = self.availableRegressionName_func_map[self.regression_type]
+    def __get_betas(self, train_X, train_y, sample_weight = None):
+        REGRESSION_TYPE = 'OLS'
+        regression_function = self.availableRegressionName_func_map[REGRESSION_TYPE]
         return regression_function(train_X, train_y, sample_weight)
     
-    def __predict(self, test_X, betas):
-        return test_X @ betas
+    def __predict(self, test_X):
+        return self.model.predict(test_X)
     
     def __get_predictActual_corr(self):
         return np.corrcoef(self.predicted_responses, self.actual_responses)
@@ -98,15 +112,17 @@ class Regression():
                                         )
         
         actual_responses = test_y.copy()
-        betas = self.__get_betas(train_X, train_y)
-        predicted_responses = self.__predict(test_X, betas)
+
+        regression_function = self.availableRegressionName_func_map[self.regression_type]       
+        model_attributes = regression_function(train_X, train_y, _sample_weight) 
+        predicted_responses = self.__predict(test_X)
         
         if allow_internal_update:
             self.actual_responses = actual_responses
-            self.betas = betas
+            # self.betas = betas
             self.predicted_responses = predicted_responses
         
-        return betas
+        return model_attributes
     
     ### Get metrics
 
@@ -127,7 +143,7 @@ class Regression():
         
     ### \Get metrics
 
-def build_feature_map(filename: str, filetype: str = None) -> dict[str, str]:
+def build_feature_map(filename: str, filetype: str = None): #-> dict[str,str]
     """Return a feature_name_str -> feature_description_str map,
     given that each line in the input file 'filename' has this STRICT format:
     
