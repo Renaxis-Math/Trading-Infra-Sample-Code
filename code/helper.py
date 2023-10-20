@@ -5,10 +5,145 @@ import numpy as np
 import importlib
 import re
 import consts
+import enum
 
 importlib.reload(consts)
 
-def build_feature_map(filename: str, filetype: str = None) -> dict[str, str]:
+class Regression():
+    def __init__(self, regression_type = 'OLS'):
+        #TODO: Whenever you customize this, remember to add your method here!!!
+        self.availableRegressionName_func_map = {
+            'OLS': self.sklearn_ols_regression,
+            'LASSO': self.sklearn_LASSO_regression,
+            'XGB' : self.xgboost_regression
+        }
+        
+        self.betas = None # betas[-1] = intercept
+        self.predicted_responses = None
+        self.actual_responses = None
+        self.model = None
+        
+        assert regression_type.upper() in self.availableRegressionName_func_map, \
+        print(f"Please select one of these existing methods:\n{self.list_all_regression_types()}")
+        self.regression_type = regression_type.upper()
+    
+    def __repr__(self) -> str:
+        return f"{self.regression_type} Regression Model"
+    
+    @staticmethod
+    def list_all_regression_types():
+        available_regressions = Regression().availableRegressionName_func_map.keys()
+        for i, regression_type in enumerate(available_regressions):
+            print(f"{i+1}: {regression_type}")
+        
+    ### Sklearn
+    def sklearn_ols_regression(self, train_X, train_y, sample_weight = None):
+        from sklearn.linear_model import LinearRegression
+        
+        model = LinearRegression(fit_intercept=False)
+        model.fit(X=train_X, y=train_y, sample_weight=sample_weight)
+        self.model = model
+        return model.coef_
+    
+    def sklearn_LASSO_regression(self, train_X, train_y, cv = 10):
+        from sklearn.linear_model import LassoCV
+        
+        model = LassoCV(cv=cv, fit_intercept=False) # Higher cv, Lower bias
+        model.fit(X=train_X, y=train_y)
+        self.model = model
+        return model.coef_     
+
+    def xgboost_regression(self, train_X, train_y, sample_weight = None):
+        from xgboost import XGBRegressor 
+
+        model = XGBRegressor("reg:squarederror", booster='gblinear')
+        model.fit(X=train_X, y=train_y)
+        self.model = model
+        return model.get_xgb_params()
+    ### \Sklearn
+    
+    ### Private methods
+    def __train_test_split(self, _df, _test_df, _response_col_name): #TODO: customize this!
+        train_X = _df.drop(_response_col_name, inplace=False, axis=consts.COL)
+        train_y = _df[_response_col_name]
+        
+        test_X = _test_df.drop(_response_col_name, inplace=False, axis=consts.COL)
+        test_y = _test_df[_response_col_name]
+        
+        return (train_X, train_y, test_X, test_y)        
+    
+    def __get_betas(self, train_X, train_y, sample_weight = None):
+        REGRESSION_TYPE = 'OLS'
+        regression_function = self.availableRegressionName_func_map[REGRESSION_TYPE]
+        return regression_function(train_X, train_y, sample_weight)
+    
+    def __predict(self, test_X):
+        return self.model.predict(test_X)
+    
+    def __get_predictActual_corr(self):
+        return np.corrcoef(self.predicted_responses, self.actual_responses)
+    
+    def __get_weighted_mean_return(self):
+        return np.sum((np.abs(self.actual_responses) / len(self.actual_responses)) * \
+                (np.sign(self.actual_responses) * np.sign(self.predicted_responses)))
+        
+    def __get_weighted_scale_factor(self):
+        if (self.actual_responses is not None) and \
+            (self.predicted_responses is not None):
+
+            train_X = pd.DataFrame(self.predicted_responses)
+            train_y = self.actual_responses
+            return self.__get_betas(train_X, train_y)
+
+        else: return None
+        
+    ### \Private methods    
+    
+    def execute(self, _train_df, _response_col_name, 
+                _test_df = None, _sample_weight = None, allow_internal_update = True):
+
+        copied_train_df = append_columnOf_ones(_train_df)
+        copied_test_df = append_columnOf_ones(_test_df) if (_test_df is not None) else None
+        
+        train_X, train_y, test_X, test_y = self.__train_test_split (
+                                            _df = copied_train_df, 
+                                            _test_df = copied_test_df, 
+                                            _response_col_name = _response_col_name
+                                        )
+        
+        actual_responses = test_y.copy()
+
+        regression_function = self.availableRegressionName_func_map[self.regression_type]       
+        model_attributes = regression_function(train_X, train_y, _sample_weight) 
+        predicted_responses = self.__predict(test_X)
+        
+        if allow_internal_update:
+            self.actual_responses = actual_responses
+            # self.betas = betas
+            self.predicted_responses = predicted_responses
+        
+        return model_attributes
+    
+    ### Get metrics
+
+    def get_metric(self):
+        """Print metrics defind by Scott
+
+        Returns: None
+        """
+        weighted_corr = self.__get_predictActual_corr()
+        weighted_mean_return = self.__get_weighted_mean_return()
+        weighted_scale_factor = self.__get_weighted_scale_factor()
+        
+        print(f"1. Weighted Correlation:\n{weighted_corr}\n")
+        print(f"2. Weighted Mean Return:\n{weighted_mean_return}\n")
+        print(f"3. Weighted Scale Factor:\n{weighted_scale_factor}\n")
+        
+        return
+        
+    ### \Get metrics
+
+def build_feature_map(filename: str, filetype: str = None): #-> dict[str,str]
     """Return a feature_name_str -> feature_description_str map,
     given that each line in the input file 'filename' has this STRICT format:
     
@@ -41,7 +176,7 @@ def build_feature_map(filename: str, filetype: str = None) -> dict[str, str]:
     if filetype:
         if (filetype[0] == '.'): filename = filename + filetype
         else: filename = filename + '.' + filetype
-    file_path = consts.DATA_PATH + filename
+    file_path = consts.RAW_DATA_PATH + filename
     # ...Build file path
 
     # Read the file...
@@ -184,22 +319,39 @@ def vif_test(r_squared: float):
 
     return
 
-def get_df_with_interaction_terms(df, col_pairs):
+def append_columnOf_ones(X):
+    """Add a column of 1 to the right-most position of input DataFrame
+
+    Args:
+        X (DataFrame): input DataFrame
+
+    Returns:
+        DataFrame: a new DataFrame with a column of 1 added to the right
+    """
+    return X.assign(b0=1)
+
+def get_df_with_interaction_terms(df, listOf_interacting_terms):
     """Return a new DataFrame that has interacting column pairs
 
     Args:
         df (DataFrame): original training data
-        col_pairs (list of list): list of column pairs
+        listOf_interacting_terms (list of list): list of column pairs
 
     Returns:
         DataFrame: resulting DataFrame
     """
-    COLUMN = 1
-    ROW = 0
-    
+    new_df = df.copy()
     all_columns = set(df.columns)
-    for col_pair in col_pairs:
-        if col_pair[0] in all_columns and col_pair[1] in all_columns:
-            df[f"({col_pair[0]}, {col_pair[1]})"] = df[col_pair[0]] * df[col_pair[1]]
-            df = df.drop(col_pair, axis = COLUMN)
-    return df
+    for interacting_terms in listOf_interacting_terms:
+        all_terms_exist = all(interacting_term in all_columns for interacting_term in interacting_terms)
+        if all_terms_exist:
+            new_col_name = str(tuple(interacting_terms))
+            
+            new_df[new_col_name] = np.prod(new_df[interacting_terms], axis=1)
+            new_df = new_df.drop(interacting_terms, axis = consts.COL)
+        else:
+            missing_indices = np.where(~all_terms_exist)
+            print(f"{np.take(interacting_terms, missing_indices)} missing or already been grouped!")
+            continue
+
+    return new_df
