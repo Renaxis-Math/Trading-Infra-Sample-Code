@@ -5,6 +5,8 @@
 # Can run file directly or use pytest tester.py under the correct directory
 
 # import coverage   // if needed
+import pandas as pd
+import numpy as np
 import importlib
 import helper, consts
 
@@ -14,6 +16,7 @@ importlib.reload(consts)
 class TestSuite():
     def run(self):
         self.test_build_feature_map()
+        self.test_get_df_with_interaction_terms()
     
     def test_build_feature_map(self):
         # Edge cases
@@ -31,6 +34,18 @@ class TestSuite():
         assert helper.build_feature_map("test input", ".txt") == {}
         assert helper.build_feature_map("test_input.txt", "txt") == {}
         assert helper.build_feature_map("data_description.txt", "txt") == {}
+        
+    def test_get_df_with_interaction_terms(self):
+        df = pd.DataFrame({'A':[1,2,3], 'B':[4,5,6], 'C':[7,8,9], 
+                           'D': [10, 11, 12], 'E':[13, 14, 15]})
+        
+        col_pairs = [
+            ['A', 'D'],
+            ['C', 'B', 'E']
+        ]
+        new_df = helper.get_df_with_interaction_terms(df, col_pairs)
+        assert all(new_df[('A', 'D')] == df['A'] * df['D']), print(new_df)
+        assert all(new_df[('C', 'B', 'E')] == df['C'] * df['B'] * df['E']), print(new_df)
         
 test_suite = TestSuite()
 test_suite.run()

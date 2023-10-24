@@ -7,7 +7,6 @@ import re
 import consts
 import enum
 
-
 importlib.reload(consts)
 
 class Regression():
@@ -22,10 +21,14 @@ class Regression():
         self.betas = None # betas[-1] = intercept
         self.predicted_responses = None
         self.actual_responses = None
+        self.model = None
         
         assert regression_type.upper() in self.availableRegressionName_func_map, \
         print(f"Please select one of these existing methods:\n{self.list_all_regression_types()}")
         self.regression_type = regression_type.upper()
+    
+    def __repr__(self) -> str:
+        return f"{self.regression_type} Regression Model"
     
     @staticmethod
     def list_all_regression_types():
@@ -39,35 +42,25 @@ class Regression():
         
         model = LinearRegression(fit_intercept=False)
         model.fit(X=train_X, y=train_y, sample_weight=sample_weight)
-
-        return model.coef_ 
+        self.model = model
+        return model.coef_
     
     def sklearn_LASSO_regression(self, train_X, train_y, cv = 10):
         from sklearn.linear_model import LassoCV
         
         model = LassoCV(cv=cv, fit_intercept=False) # Higher cv, Lower bias
         model.fit(X=train_X, y=train_y)
-        
+        self.model = model
         return model.coef_     
+
+    def xgboost_regression(self, train_X, train_y, sample_weight = None):
+        from xgboost import XGBRegressor 
+
+        model = XGBRegressor("reg:squarederror", booster='gblinear')
+        model.fit(X=train_X, y=train_y)
+        self.model = model
+        return model.get_xgb_params()
     ### \Sklearn
-
-    # xgboost 
-    def xgboost_regression(self, train_X, train_y, boost_round):
-        import xgboost as xgb
-        
-        # convert the dataframe into DMatrix
-        dtrain = xgb.DMatrix(train_X, train_y)
-        
-        # create a xgboost model
-        params = {"objective": "reg:squarederror"}
-        model = xgb.train(
-                params=params,
-                dtrain=dtrain,
-                num_boost_round=boost_round,
-                )
-
-    # TODO: should not be coef_ here!
-        return model.coef_ 
     
     ### Private methods
     def __train_test_split(self, _df, _test_df, _response_col_name): #TODO: customize this!
@@ -79,12 +72,13 @@ class Regression():
         
         return (train_X, train_y, test_X, test_y)        
     
-    def __get_betas(self, train_X, train_y, sample_weight = None): #TODO: customize this!
-        regression_function = self.availableRegressionName_func_map[self.regression_type]
+    def __get_betas(self, train_X, train_y, sample_weight = None):
+        REGRESSION_TYPE = 'OLS'
+        regression_function = self.availableRegressionName_func_map[REGRESSION_TYPE]
         return regression_function(train_X, train_y, sample_weight)
     
-    def __predict(self, test_X, betas):
-        return test_X @ betas
+    def __predict(self, test_X):
+        return self.model.predict(test_X)
     
     def __get_predictActual_corr(self):
         return np.corrcoef(self.predicted_responses, self.actual_responses)
@@ -118,15 +112,17 @@ class Regression():
                                         )
         
         actual_responses = test_y.copy()
-        betas = self.__get_betas(train_X, train_y)
-        predicted_responses = self.__predict(test_X, betas)
+
+        regression_function = self.availableRegressionName_func_map[self.regression_type]       
+        model_attributes = regression_function(train_X, train_y, _sample_weight) 
+        predicted_responses = self.__predict(test_X)
         
         if allow_internal_update:
             self.actual_responses = actual_responses
-            self.betas = betas
+            # self.betas = betas
             self.predicted_responses = predicted_responses
         
-        return betas
+        return model_attributes
     
     ### Get metrics
 
@@ -147,7 +143,7 @@ class Regression():
         
     ### \Get metrics
 
-def build_feature_map(filename: str, filetype: str = None) -> dict[str, str]:
+def build_feature_map(filename: str, filetype: str = None): #-> dict[str,str]
     """Return a feature_name_str -> feature_description_str map,
     given that each line in the input file 'filename' has this STRICT format:
     
@@ -359,23 +355,3 @@ def get_df_with_interaction_terms(df, listOf_interacting_terms):
             continue
 
     return new_df
-
-def get_df_with_interaction_terms(df, col_pairs):
-    """Return a new DataFrame that has interacting column pairs
-
-    Args:
-        df (DataFrame): original training data
-        col_pairs (list of list): list of column pairs
-
-    Returns:
-        DataFrame: resulting DataFrame
-    """
-    COLUMN = 1
-    ROW = 0
-    
-    all_columns = set(df.columns)
-    for col_pair in col_pairs:
-        if col_pair[0] in all_columns and col_pair[1] in all_columns:
-            df[f"({col_pair[0]}, {col_pair[1]})"] = df[col_pair[0]] * df[col_pair[1]]
-            df = df.drop(col_pair, axis = COLUMN)
-    return df

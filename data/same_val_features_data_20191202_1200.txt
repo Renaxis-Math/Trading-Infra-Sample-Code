@@ -1,5 +1,0 @@
-['llirpnxm_pm_1', 'nnetticksrelrrsign_pm_1', 'nsameticksrelrrsign_pm_1',
-       'rel2retcfrtxm_pm_1', 'relntrds70tr_pm_1', 'relvol_pm_1',
-       'rrirpnxm_pm_1', 'rrretstr_pm_1', 'rvdelta_nt_0', 'rvdelta_nt_1',
-       'rvdelta_nt_12to16', 'rvdelta_nt_17to21', 'rvdelta_nt_1to3',
-       'rvdelta_nt_4to6', 'rvdelta_nt_7to11', 'tr_pm_1']

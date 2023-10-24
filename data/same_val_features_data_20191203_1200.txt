@@ -1,3 +1,0 @@
-['rvdelta_nt_0', 'rvdelta_nt_1', 'rvdelta_nt_12to16',
-       'rvdelta_nt_17to21', 'rvdelta_nt_1to3', 'rvdelta_nt_4to6',
-       'rvdelta_nt_7to11']
