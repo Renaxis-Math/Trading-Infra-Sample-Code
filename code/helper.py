@@ -15,7 +15,7 @@ class Regression():
         self.availableRegressionName_func_map = {
             'OLS': self.sklearn_ols_regression,
             'LASSO': self.sklearn_LASSO_regression,
-            'XGB' : self.xgboost_regression
+            'XGboost': self.xgboost_regression
         }
         
         self.betas = None # betas[-1] = intercept
