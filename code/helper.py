@@ -15,7 +15,8 @@ class Regression():
         #TODO: Whenever you customize this, remember to add your method here!!!
         self.availableRegressionName_func_map = {
             'OLS': self.sklearn_ols_regression,
-            'LASSO': self.sklearn_LASSO_regression
+            'LASSO': self.sklearn_LASSO_regression,
+            'XGboost': self.xgboost_regression
         }
         
         self.betas = None # betas[-1] = intercept
@@ -65,6 +66,7 @@ class Regression():
                 num_boost_round=boost_round,
                 )
 
+    # TODO: should not be coef_ here!
         return model.coef_ 
     
     ### Private methods
