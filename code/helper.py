@@ -359,3 +359,23 @@ def get_df_with_interaction_terms(df, listOf_interacting_terms):
             continue
 
     return new_df
+
+def get_df_with_interaction_terms(df, col_pairs):
+    """Return a new DataFrame that has interacting column pairs
+
+    Args:
+        df (DataFrame): original training data
+        col_pairs (list of list): list of column pairs
+
+    Returns:
+        DataFrame: resulting DataFrame
+    """
+    COLUMN = 1
+    ROW = 0
+    
+    all_columns = set(df.columns)
+    for col_pair in col_pairs:
+        if col_pair[0] in all_columns and col_pair[1] in all_columns:
+            df[f"({col_pair[0]}, {col_pair[1]})"] = df[col_pair[0]] * df[col_pair[1]]
+            df = df.drop(col_pair, axis = COLUMN)
+    return df
