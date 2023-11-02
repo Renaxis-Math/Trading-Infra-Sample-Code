@@ -5,7 +5,7 @@ import numpy as np
 import importlib
 import re
 import consts
-import enum
+import os
 
 importlib.reload(consts)
 
@@ -15,14 +15,13 @@ class Regression():
         self.availableRegressionName_func_map = {
             'OLS': self.sklearn_ols_regression,
             'LASSO': self.sklearn_LASSO_regression,
-            'XGboost': self.xgboost_regression
+            'XGBOOST': self.xgboost_regression
         }
         
         self.betas = None # betas[-1] = intercept
         self.predicted_responses = None
         self.actual_responses = None
         self.model = None
-        
         assert regression_type.upper() in self.availableRegressionName_func_map, \
         print(f"Please select one of these existing methods:\n{self.list_all_regression_types()}")
         self.regression_type = regression_type.upper()
@@ -348,10 +347,47 @@ def get_df_with_interaction_terms(df, listOf_interacting_terms):
             new_col_name = str(tuple(interacting_terms))
             
             new_df[new_col_name] = np.prod(new_df[interacting_terms], axis=1)
-            new_df = new_df.drop(interacting_terms, axis = consts.COL)
+            # new_df = new_df.drop(interacting_terms, axis = consts.COL)
         else:
             missing_indices = np.where(~all_terms_exist)
             print(f"{np.take(interacting_terms, missing_indices)} missing or already been grouped!")
             continue
 
     return new_df
+
+def get_file_names(start, end)->list:
+    """Gets the file names between the start and end. 
+    Example parameter: 20150101 is January 1st 2015. yyyymmdd
+    
+    Args: 
+    start (string): Start date of training
+    end (string): Past the end date of training. Not included
+
+    Returns: 
+        List[string]: List of all training files. 
+    """
+    files = os.listdir(consts.DATA_PATH_2015)
+    files = sorted(filter(lambda fname: fname < f"data.{end}" and fname >= f"data.{start}", files))
+    return files
+
+def get_train_test_df(start, end, test_date,x_cols, interacting_terms = []):
+    """Reads data from files to get training and testing data
+
+    Args: 
+    start: Starting date
+    end: Ending date of training
+    x_cols: x_columns to train on
+    interacting_terms: Columns to multiply together. 
+
+    Returns: 
+    (DataFrame, DataFrame): training df and testing df. 
+    """
+    files = get_file_names(start, end)
+    dfs = [pd.read_csv(consts.DATA_PATH_2015 + f) for f in files]
+    full_df = pd.concat(dfs)
+    test_df = pd.read_csv(consts.DATA_PATH_2015 + f"data.{test_date}_1200")
+    saved_cols = x_cols + [consts.RESPONSE_NAME]
+    # call interacting terms df
+    training_df = full_df[saved_cols]
+    testing_df = test_df[saved_cols]
+    return training_df, testing_df
