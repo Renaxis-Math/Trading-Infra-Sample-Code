@@ -22,10 +22,17 @@ class Regression():
         self.predicted_responses = None
         self.actual_responses = None
         self.model = None
-        assert regression_type.upper() in self.availableRegressionName_func_map, \
-        print(f"Please select one of these existing methods:\n{self.list_all_regression_types()}")
-        self.regression_type = regression_type.upper()
-    
+        
+        if regression_type in self.availableRegressionName_func_map:
+            self.regression_type = regression_type
+        elif regression_type.lower() in self.availableRegressionName_func_map:
+            self.regression_type = regression_type.lower()
+        elif regression_type.upper() in self.availableRegressionName_func_map:
+            self.regression_type = regression_type.upper()
+        elif regression_type.capitalize() in self.availableRegressionName_func_map:
+            self.regression_type = regression_type.capitalize()
+        else:
+            print(f"{regression_type} does not exist.")
     def __repr__(self) -> str:
         return f"{self.regression_type} Regression Model"
     
