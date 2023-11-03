@@ -3,7 +3,6 @@
 
 ROW = 0
 COL = 1
-RAW_DATA_PATH = "../data"
-DATA_PATH_2015 = "../data/hmc2015/"
+RAW_DATA_PATH = "../data/"
 CLEANED_DATA_PATH = "../data/cleaned_data/"
 RESPONSE_NAME = "tonight"

@@ -373,7 +373,7 @@ def get_file_names(start, end)->list:
     Returns: 
         List[string]: List of all training files. 
     """
-    files = os.listdir(consts.DATA_PATH_2015)
+    files = os.listdir(consts.RAW_DATA_PATH)
     files = sorted(filter(lambda fname: fname < f"data.{end}" and fname >= f"data.{start}", files))
     return files
 
@@ -390,9 +390,9 @@ def get_train_test_df(start, end, test_date,x_cols, interacting_terms = []):
     (DataFrame, DataFrame): training df and testing df. 
     """
     files = get_file_names(start, end)
-    dfs = [pd.read_csv(consts.DATA_PATH_2015 + f) for f in files]
+    dfs = [pd.read_csv(consts.RAW_DATA_PATH + f) for f in files]
     full_df = pd.concat(dfs)
-    test_df = pd.read_csv(consts.DATA_PATH_2015 + f"data.{test_date}_1200")
+    test_df = pd.read_csv(consts.RAW_DATA_PATH + f"data.{test_date}_1200")
     saved_cols = x_cols + [consts.RESPONSE_NAME]
     # call interacting terms df
     training_df = full_df[saved_cols]
