@@ -15,7 +15,7 @@ class Regression():
         self.availableRegressionName_func_map = {
             'OLS': self.sklearn_ols_regression,
             'LASSO': self.sklearn_LASSO_regression,
-            'XGboost': self.xgboost_regression
+            'XGBOOST': self.xgboost_regression
         }
         
         self.betas = None # betas[-1] = intercept
@@ -355,7 +355,7 @@ def get_df_with_interaction_terms(df, listOf_interacting_terms):
             new_col_name = str(tuple(interacting_terms))
             
             new_df[new_col_name] = np.prod(new_df[interacting_terms], axis=1)
-            new_df = new_df.drop(interacting_terms, axis = consts.COL)
+           # new_df = new_df.drop(interacting_terms, axis = consts.COL)
         else:
             missing_indices = np.where(~all_terms_exist)
             print(f"{np.take(interacting_terms, missing_indices)} missing or already been grouped!")
