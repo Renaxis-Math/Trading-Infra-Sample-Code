@@ -51,11 +51,11 @@ class Regression():
         self.model = model
         return model.coef_
     
-    def sklearn_LASSO_regression(self, train_X, train_y, cv = 10):
+    def sklearn_LASSO_regression(self, train_X, train_y, cv = 10, sample_weight = None):
         from sklearn.linear_model import LassoCV
         
         model = LassoCV(cv=cv, fit_intercept=False) # Higher cv, Lower bias
-        model.fit(X=train_X, y=train_y)
+        model.fit(X=train_X, y=train_y, sample_weight=sample_weight)
         self.model = model
         return model.coef_     
 
@@ -63,7 +63,7 @@ class Regression():
         from xgboost import XGBRegressor 
 
         model = XGBRegressor("reg:squarederror", booster='gblinear')
-        model.fit(X=train_X, y=train_y)
+        model.fit(X=train_X, y=train_y, sample_weight=sample_weight)
         self.model = model
         return model.get_xgb_params()
     ### \Sklearn
@@ -398,3 +398,77 @@ def get_train_test_df(start, end, test_date,x_cols, interacting_terms = []):
     training_df = full_df[saved_cols]
     testing_df = test_df[saved_cols]
     return training_df, testing_df
+
+def get_file_names(start, end)->list:
+    """Gets the file names between the start and end. 
+    Example parameter: 20150101 is January 1st 2015. yyyymmdd
+    
+    Args: 
+    start (string): Start date of training
+    end (string): Past the end date of training. Not included
+    Returns: 
+        List[string]: List of all training files. 
+    """
+    files = os.listdir(consts.DATA_PATH_2015)
+    files = sorted(filter(lambda fname: fname < f"data.{end}" and fname >= f"data.{start}", files))
+    return files
+
+def get_train_test_df(start, end, test_date,x_cols, interacting_terms = []):
+    """Reads data from files to get training and testing data
+    Args: 
+    start: Starting date
+    end: Ending date of training
+    x_cols: x_columns to train on
+    interacting_terms: Columns to multiply together. 
+    Returns: 
+    (DataFrame, DataFrame): training df and testing df. 
+    """
+    files = get_file_names(start, end)
+    dfs = [pd.read_csv(consts.DATA_PATH_2015 + f) for f in files]
+    full_df = pd.concat(dfs)
+    test_df = pd.read_csv(consts.DATA_PATH_2015 + f"data.{test_date}_1200")
+    saved_cols = x_cols + [consts.RESPONSE_NAME]
+    # call interacting terms df
+    training_df = full_df[saved_cols]
+    testing_df = test_df[saved_cols]
+    return training_df, testing_df
+
+def get_train_from_testday(testday):
+    """Reads the testday from const and parse the day to get the range of train dates
+    Args: 
+    testday: first day of the test month, in form of yyyymmdd
+    """
+    year = int(testday[:4])
+    month = testday[4:6]
+    day = int(testday[6:])
+
+    if month == "01":
+        trainMonth = 11
+        startYear = year - 2
+    elif month == "02":
+        trainMonth = 12
+        startYear = year - 2
+    else:
+        trainMonth = month - 2
+        startYear = year - 1   
+    
+    startDay = str(startYear) + str(trainMonth) + "01"
+    endDay = str(startYear+1) + str(trainMonth) + "31"
+
+    return [startDay, endDay]
+    
+
+    # for the get_file_names method, if the startday does not exist, is that okay
+    # do they just return the dates inbetween 2 days even if these dates on the end of ranges does not exist
+
+def get_weights(df):
+    """ return a vector of weights corresponding to each sample of the training df
+    Args:
+    df: training dataframe, pandas dataframe object
+    """
+    n = df.shape[0]
+    blockSize = n/12
+    # leftSample = n - blockSize * 12
+    # weights = [for i in range(1,13)1 * blockSize]
+    weights = [i/blockSize+0.5 for i in range(n)]
+    return weights
