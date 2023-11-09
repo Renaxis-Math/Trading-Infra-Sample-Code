@@ -83,6 +83,8 @@ class Regression():
         regression_function = self.availableRegressionName_func_map[REGRESSION_TYPE]
         return regression_function(train_X, train_y, sample_weight)
     
+
+        # Design choice: Make these methods "Public"?
     def __predict(self, test_X):
         return self.model.predict(test_X)
     
@@ -105,28 +107,28 @@ class Regression():
         
     ### \Private methods    
     
-    def execute(self, _train_df, _response_col_name, 
-                _test_df = None, _sample_weight = None, allow_internal_update = True):
+    def train(self, _train_df, _response_col_name, 
+                _sample_weight = None):
 
         copied_train_df = append_columnOf_ones(_train_df)
-        copied_test_df = append_columnOf_ones(_test_df) if (_test_df is not None) else None
+        # copied_test_df = append_columnOf_ones(_test_df) if (_test_df is not None) else None
         
-        train_X, train_y, test_X, test_y = self.__train_test_split (
-                                            _df = copied_train_df, 
-                                            _test_df = copied_test_df, 
-                                            _response_col_name = _response_col_name
-                                        )
-        
-        actual_responses = test_y.copy()
+        train_X = copied_train_df.drop(_response_col_name, inplace=False, axis=consts.COL)
+        train_y = copied_train_df[_response_col_name]
+        # train_X, train_y, test_X, test_y = self.__train_test_split (
+        #                                     _df = copied_train_df, 
+        #                                     _test_df = copied_test_df, 
+        #                                     _response_col_name = _response_col_name
+        #                                 )
+        # actual_responses = test_y.copy()
 
         regression_function = self.availableRegressionName_func_map[self.regression_type]       
-        model_attributes = regression_function(train_X, train_y, _sample_weight) 
-        predicted_responses = self.__predict(test_X)
+        model_attributes = regression_function(train_X, train_y, _sample_weight) # Calls .fit
+        # predicted_responses = self.__predict(test_X)
         
-        if allow_internal_update:
-            self.actual_responses = actual_responses
-            # self.betas = betas
-            self.predicted_responses = predicted_responses
+        # if allow_internal_update:
+        #     self.actual_responses = actual_responses
+        #     self.predicted_responses = predicted_responses
         
         return model_attributes
     
@@ -135,7 +137,7 @@ class Regression():
     def get_metric(self):
         """Print metrics defind by Scott
 
-        Returns: None
+        Returns: [weighted_corr, mean_return, scale_factor]
         """
         weighted_corr = self.__get_predictActual_corr()
         weighted_mean_return = self.__get_weighted_mean_return()
@@ -147,7 +149,40 @@ class Regression():
         
         return
         
-    ### \Get metrics
+    ### Get metrics
+    def get_average_metrics(self, start:str, end:str, x_cols:[str]) -> None:
+        """
+        Reads in Files between the start date and end date, 
+        Uses a trained model to predict start and end.
+        """
+        weighted_corrs, mean_returns, weighted_sf = [], [], []
+        test_dates = get_file_names(start, end)
+        for day in test_dates:
+            test_df = pd.read_csv(consts.RAW_DATA_PATH + day)
+            # test_x = append_columnOf_ones(test_x)
+            test_X = test_df.drop(consts.RESPONSE_NAME, inplace=False, axis=consts.COL)
+            test_X = test_X[x_cols]
+            test_X = append_columnOf_ones(test_X)
+            test_y = test_df[consts.RESPONSE_NAME]
+            self.actual_responses = test_y
+            self.predicted_responses = self.__predict(test_X)
+
+
+            weighted_corrs.append(self.__get_predictActual_corr())
+            mean_returns.append(self.__get_weighted_mean_return())
+            weighted_sf.append( self.__get_weighted_scale_factor())
+
+        avg_wt_corr = np.average(weighted_corrs)
+        avg_returns = np.average(mean_returns)
+        avg_sf = np.average(weighted_sf)
+                
+        print(f"1. Weighted Correlation:\n{avg_wt_corr}\n")
+        print(f"2. Weighted Mean Return:\n{avg_returns}\n")
+        print(f"3. Weighted Scale Factor:\n{avg_sf}\n")
+
+        return
+        
+        
 
 def build_feature_map(filename: str, filetype: str = None): #-> dict[str,str]
     """Return a feature_name_str -> feature_description_str map,
@@ -377,6 +412,7 @@ def get_file_names(start, end)->list:
     files = sorted(filter(lambda fname: fname < f"data.{end}" and fname >= f"data.{start}", files))
     return files
 
+# Delete this entire function?
 def get_train_test_df(start, end, test_date,x_cols, interacting_terms = []):
     """Reads data from files to get training and testing data
 
@@ -398,3 +434,19 @@ def get_train_test_df(start, end, test_date,x_cols, interacting_terms = []):
     training_df = full_df[saved_cols]
     testing_df = test_df[saved_cols]
     return training_df, testing_df
+
+def get_df(start,end, x_cols):
+    """Reads data from files to get data for the range
+    Args: 
+    start: Starting date
+    end: Ending date of data
+    x_cols: x_columns to train on
+    Returns: 
+    DataFrame: Data Frame for all the correct columns between the start and end dates.  
+    """
+    files = get_file_names(start, end)
+    dfs = [pd.read_csv(consts.RAW_DATA_PATH + f) for f in files]
+    saved_cols = x_cols + [consts.RESPONSE_NAME]
+    full_df = pd.concat(dfs)
+    return full_df[saved_cols]
+
