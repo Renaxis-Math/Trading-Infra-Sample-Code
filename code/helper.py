@@ -43,28 +43,30 @@ class Regression():
             print(f"{i+1}: {regression_type}")
         
     ### Sklearn
-    def sklearn_ols_regression(self, train_X, train_y, sample_weight = None):
+    def sklearn_ols_regression(self, train_X, train_y, sample_weight = None, allow_internal_update = True):
         from sklearn.linear_model import LinearRegression
         
         model = LinearRegression(fit_intercept=False)
         model.fit(X=train_X, y=train_y, sample_weight=sample_weight)
-        self.model = model
+
+        if allow_internal_update: self.model = model
         return model.coef_
     
-    def sklearn_LASSO_regression(self, train_X, train_y, cv = 10, sample_weight = None):
+    def sklearn_LASSO_regression(self, train_X, train_y, cv = 10, sample_weight = None, allow_internal_update = True):
         from sklearn.linear_model import LassoCV
         
         model = LassoCV(cv=cv, fit_intercept=False) # Higher cv, Lower bias
         model.fit(X=train_X, y=train_y, sample_weight=sample_weight)
-        self.model = model
+        if allow_internal_update: self.model = model
         return model.coef_     
 
-    def xgboost_regression(self, train_X, train_y, sample_weight = None):
+    def xgboost_regression(self, train_X, train_y, sample_weight = None, allow_internal_update = True):
         from xgboost import XGBRegressor 
 
         model = XGBRegressor("reg:squarederror", booster='gblinear')
         model.fit(X=train_X, y=train_y, sample_weight=sample_weight)
-        self.model = model
+        if allow_internal_update: self.model = model
+
         return model.get_xgb_params()
     ### \Sklearn
     
@@ -78,10 +80,10 @@ class Regression():
         
         return (train_X, train_y, test_X, test_y)        
     
-    def __get_betas(self, train_X, train_y, sample_weight = None):
+    def __get_betas(self, train_X, train_y, sample_weight = None, allow_internal_update = False):
         REGRESSION_TYPE = 'OLS'
         regression_function = self.availableRegressionName_func_map[REGRESSION_TYPE]
-        return regression_function(train_X, train_y, sample_weight)
+        return regression_function(train_X, train_y, sample_weight, allow_internal_update)
     
     def __predict(self, test_X):
         return self.model.predict(test_X)
@@ -103,7 +105,7 @@ class Regression():
 
         else: return None
         
-    ### \Private methods    
+    ### \Private methods   
     
     def execute(self, _train_df, _response_col_name, 
                 _test_df = None, _sample_weight = None, allow_internal_update = True):
@@ -119,7 +121,7 @@ class Regression():
         
         actual_responses = test_y.copy()
 
-        regression_function = self.availableRegressionName_func_map[self.regression_type]       
+        regression_function = self.availableRegressionName_func_map[self.regression_type]   
         model_attributes = regression_function(train_X, train_y, _sample_weight) 
         predicted_responses = self.__predict(test_X)
         
@@ -377,7 +379,7 @@ def get_file_names(start, end)->list:
     files = sorted(filter(lambda fname: fname < f"data.{end}" and fname >= f"data.{start}", files))
     return files
 
-def get_train_test_df(start, end, test_date,x_cols, interacting_terms = []):
+def get_train_test_df(start, end, test_date,x_cols, interacting_terms = [], path = consts.RAW_DATA_PATH):
     """Reads data from files to get training and testing data
 
     Args: 
@@ -390,9 +392,9 @@ def get_train_test_df(start, end, test_date,x_cols, interacting_terms = []):
     (DataFrame, DataFrame): training df and testing df. 
     """
     files = get_file_names(start, end)
-    dfs = [pd.read_csv(consts.RAW_DATA_PATH + f) for f in files]
+    dfs = [pd.read_csv(path + f) for f in files]
     full_df = pd.concat(dfs)
-    test_df = pd.read_csv(consts.RAW_DATA_PATH + f"data.{test_date}_1200")
+    test_df = pd.read_csv(path + f"data.{test_date}_1200.csv")
     saved_cols = x_cols + [consts.RESPONSE_NAME]
     # call interacting terms df
     training_df = full_df[saved_cols]
@@ -426,7 +428,7 @@ def get_train_test_df(start, end, test_date,x_cols, interacting_terms = []):
     files = get_file_names(start, end)
     dfs = [pd.read_csv(consts.DATA_PATH_2015 + f) for f in files]
     full_df = pd.concat(dfs)
-    test_df = pd.read_csv(consts.DATA_PATH_2015 + f"data.{test_date}_1200")
+    test_df = pd.read_csv(consts.DATA_PATH_2015 + f"data.{test_date}_1200.csv")
     saved_cols = x_cols + [consts.RESPONSE_NAME]
     # call interacting terms df
     training_df = full_df[saved_cols]
@@ -468,7 +470,5 @@ def get_weights(df):
     """
     n = df.shape[0]
     blockSize = n/12
-    # leftSample = n - blockSize * 12
-    # weights = [for i in range(1,13)1 * blockSize]
     weights = [i/blockSize+0.5 for i in range(n)]
     return weights
