@@ -113,30 +113,53 @@ class Regression():
                 _sample_weight = None):
 
         copied_train_df = append_columnOf_ones(_train_df)
-        # copied_test_df = append_columnOf_ones(_test_df) if (_test_df is not None) else None
         
         train_X = copied_train_df.drop(_response_col_name, inplace=False, axis=consts.COL)
         train_y = copied_train_df[_response_col_name]
-        # train_X, train_y, test_X, test_y = self.__train_test_split (
-        #                                     _df = copied_train_df, 
-        #                                     _test_df = copied_test_df, 
-        #                                     _response_col_name = _response_col_name
-        #                                 )
-        # actual_responses = test_y.copy()
-
         regression_function = self.availableRegressionName_func_map[self.regression_type]   
         model_attributes = regression_function(train_X, train_y, _sample_weight) 
-        predicted_responses = self.__predict(test_X)
-        
-        # if allow_internal_update:
-        #     self.actual_responses = actual_responses
-        #     self.predicted_responses = predicted_responses
-        
+
         return model_attributes
     
-    ### Get metrics
+    def train_model(self, train_df:pd.DataFrame, response:str, sample_weights = None):
+        """Trains a model with a training data frame
+        """
+        train_df = append_columnOf_ones(train_df) #???
 
-    def get_metric(self):
+        #Split into X and y
+        train_X = train_df.drop(response, inplace=False, axis=consts.COL)
+        train_y = train_df[response]
+
+        regression_function = self.availableRegressionName_func_map[self.regression_type]   
+        model_attributes = regression_function(train_X, train_y, sample_weights) 
+        return model_attributes
+
+    ### Get metrics
+    def evaluateModel(self, test_start:str, test_end:str, x_cols:[str], ):
+
+        filenames = get_file_names(test_start, test_end)
+        wt_corr, wt_mean_ret, wt_sf = [], [], []
+        for file in filenames:
+            df = pd.read_csv(consts.RAW_DATA_PATH + file)
+            test_X = df[x_cols]
+            test_X = append_columnOf_ones(test_X)
+            predicted_y = self.__predict(test_X)
+            self.predicted_responses = predicted_y
+            self.actual_responses = df[consts.RESPONSE_NAME]
+            corr,ret,sf = self.get_metric(False)
+            wt_corr.append(corr)
+            wt_mean_ret.append(ret)
+            wt_sf.append(sf)
+
+        avg_wt_corr = np.average(wt_corr) # Could be cleaner with mapping. 
+        avg_wt_mean = np.average(wt_mean_ret)
+        avg_wt_sf = np.average(wt_sf)
+        print(f"Average Weighted Correlation: {avg_wt_corr}")
+        print(f"Average Mean Return: {avg_wt_mean}")
+        print(f"Average weighted Scale Factor: {avg_wt_sf}")
+        return avg_wt_corr,avg_wt_mean,avg_wt_sf
+
+    def get_metric(self, printMetrics = True):
         """Print metrics defind by Scott
 
         Returns: [weighted_corr, mean_return, scale_factor]
@@ -145,44 +168,12 @@ class Regression():
         weighted_mean_return = self.__get_weighted_mean_return()
         weighted_scale_factor = self.__get_weighted_scale_factor()
         
-        print(f"1. Weighted Correlation:\n{weighted_corr}\n")
-        print(f"2. Weighted Mean Return:\n{weighted_mean_return}\n")
-        print(f"3. Weighted Scale Factor:\n{weighted_scale_factor}\n")
+        if printMetrics:
+            print(f"1. Weighted Correlation:\n{weighted_corr}\n")
+            print(f"2. Weighted Mean Return:\n{weighted_mean_return}\n")
+            print(f"3. Weighted Scale Factor:\n{weighted_scale_factor}\n")
         
-        return
-        
-    ### Get metrics
-    def get_average_metrics(self, start:str, end:str, x_cols:[str]) -> None:
-        """
-        Reads in Files between the start date and end date, 
-        Uses a trained model to predict start and end.
-        """
-        weighted_corrs, mean_returns, weighted_sf = [], [], []
-        test_dates = get_file_names(start, end)
-        for day in test_dates:
-            test_df = pd.read_csv(consts.RAW_DATA_PATH + day)
-            # test_x = append_columnOf_ones(test_x)
-            test_X = test_df.drop(consts.RESPONSE_NAME, inplace=False, axis=consts.COL)
-            test_X = test_X[x_cols]
-            test_X = append_columnOf_ones(test_X)
-            test_y = test_df[consts.RESPONSE_NAME]
-            self.actual_responses = test_y
-            self.predicted_responses = self.__predict(test_X)
-
-
-            weighted_corrs.append(self.__get_predictActual_corr())
-            mean_returns.append(self.__get_weighted_mean_return())
-            weighted_sf.append( self.__get_weighted_scale_factor())
-
-        avg_wt_corr = np.average(weighted_corrs)
-        avg_returns = np.average(mean_returns)
-        avg_sf = np.average(weighted_sf)
-                
-        print(f"1. Weighted Correlation:\n{avg_wt_corr}\n")
-        print(f"2. Weighted Mean Return:\n{avg_returns}\n")
-        print(f"3. Weighted Scale Factor:\n{avg_sf}\n")
-
-        return
+        return (weighted_corr, weighted_mean_return, weighted_scale_factor)
         
         
 
@@ -414,6 +405,7 @@ def get_file_names(start, end)->list:
     files = sorted(filter(lambda fname: fname < f"data.{end}" and fname >= f"data.{start}", files))
     return files
 
+# delete this
 def get_train_test_df(start, end, test_date,x_cols, interacting_terms = [], path = consts.RAW_DATA_PATH):
     """Reads data from files to get training and testing data
 
@@ -429,7 +421,7 @@ def get_train_test_df(start, end, test_date,x_cols, interacting_terms = [], path
     files = get_file_names(start, end)
     dfs = [pd.read_csv(path + f) for f in files]
     full_df = pd.concat(dfs)
-    test_df = pd.read_csv(path + f"data.{test_date}_1200.csv")
+    test_df = pd.read_csv(path + f"data.{test_date}_1200")
     saved_cols = x_cols + [consts.RESPONSE_NAME]
     # call interacting terms df
     training_df = full_df[saved_cols]
@@ -450,33 +442,31 @@ def get_file_names(start, end)->list:
     files = sorted(filter(lambda fname: fname < f"data.{end}" and fname >= f"data.{start}", files))
     return files
 
-def get_train_test_df(start, end, test_date,x_cols, interacting_terms = []):
-    """Reads data from files to get training and testing data
+def get_df(start:str, end:str,x_cols, interacting_terms = [])-> pd.DataFrame:
+    """Reads data from files to get a df of all days between start and end date
     Args: 
     start: Starting date
     end: Ending date of training
     x_cols: x_columns to train on
     interacting_terms: Columns to multiply together. 
     Returns: 
-    (DataFrame, DataFrame): training df and testing df. 
+    Dataframe: training df and testing df. 
     """
     files = get_file_names(start, end)
-    dfs = [pd.read_csv(consts.DATA_PATH_2015 + f) for f in files]
+    dfs = [pd.read_csv(consts.RAW_DATA_PATH + f) for f in files]
     full_df = pd.concat(dfs)
-    test_df = pd.read_csv(consts.DATA_PATH_2015 + f"data.{test_date}_1200.csv")
     saved_cols = x_cols + [consts.RESPONSE_NAME]
     # call interacting terms df
-    training_df = full_df[saved_cols]
-    testing_df = test_df[saved_cols]
-    return training_df, testing_df
+    return full_df[saved_cols]
+    
 
 def get_train_from_testday(testday):
-    """Reads the testday from const and parse the day to get the range of train dates
+    """Reads the testday from input and parse the day to get the range of train dates
     Args: 
-    testday: first day of the test month, in form of yyyymmdd
+    testday: a day of the test month, in form of yyyymmdd. (day is irrelevant)
     """
     year = int(testday[:4])
-    month = testday[4:6]
+    month = int(testday[4:6])
     day = int(testday[6:])
 
     if month == "01":
@@ -488,15 +478,17 @@ def get_train_from_testday(testday):
     else:
         trainMonth = month - 2
         startYear = year - 1   
-    
-    startDay = str(startYear) + str(trainMonth) + "01"
-    endDay = str(startYear+1) + str(trainMonth) + "31"
+    zero = "0" * (trainMonth < 10) # checks if zero is needed
+    startDay = str(startYear) + zero + str(trainMonth) + "01"
+
+    endDay = str(startYear+1) + zero + str(trainMonth) + "31"
 
     return [startDay, endDay]
     
 
     # for the get_file_names method, if the startday does not exist, is that okay
     # do they just return the dates inbetween 2 days even if these dates on the end of ranges does not exist
+    # This should be good -- uses the < and > operators on strings. 
 
 def get_weights(df):
     """ return a vector of weights corresponding to each sample of the training df
