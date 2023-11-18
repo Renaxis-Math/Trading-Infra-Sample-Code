@@ -350,7 +350,7 @@ def get_df_with_interaction_terms(df, listOf_interacting_terms):
     """
     new_df = df.copy()
     all_columns = set(df.columns)
-    print(all_columns)
+
     for interacting_terms in listOf_interacting_terms:
         all_terms_exist = all(interacting_term in all_columns for interacting_term in interacting_terms)
         if all_terms_exist:
@@ -436,29 +436,27 @@ def get_train_test_df(start, end, test_date,x_cols, interacting_terms = []):
     return training_df, testing_df
 
 def get_train_from_testday(testday):
-    """Reads the testday from const and parse the day to get the range of train dates
-    Args: 
-    testday: first day of the test month, in form of yyyymmdd
+    """Reads the testday from input and parse the day to get the range of train dates
+    Args:
+    testday: a day of the test month, in form of yyyymmdd. (day is irrelevant)
     """
     year = int(testday[:4])
-    month = testday[4:6]
+    month_str = testday[4:6]
+    month_int = int(month_str)
     day = int(testday[6:])
-
-    if month == "01":
+    if month_str == "01":
         trainMonth = 11
         startYear = year - 2
-    elif month == "02":
+    elif month_str == "02":
         trainMonth = 12
         startYear = year - 2
     else:
-        trainMonth = month - 2
-        startYear = year - 1   
-    
-    startDay = str(startYear) + str(trainMonth) + "01"
-    endDay = str(startYear+1) + str(trainMonth) + "01"
-
+        trainMonth = month_int - 2
+        startYear = year - 1
+    zero = "0" * (trainMonth < 10) # checks if zero is needed
+    startDay = str(startYear) + zero + str(trainMonth) + "01"
+    endDay = str(startYear+1) + zero + str(trainMonth) + "01"
     return [startDay, endDay]
-    
 
     # for the get_file_names method, if the startday does not exist, is that okay
     # do they just return the dates inbetween 2 days even if these dates on the end of ranges does not exist
