@@ -44,8 +44,8 @@ class TestSuite():
             ['C', 'B', 'E']
         ]
         new_df = helper.get_df_with_interaction_terms(df, col_pairs)
-        assert all(new_df[('A', 'D')] == df['A'] * df['D']), print(new_df)
-        assert all(new_df[('C', 'B', 'E')] == df['C'] * df['B'] * df['E']), print(new_df)
+        assert all(new_df["('A', 'D')"] == df['A'] * df['D']), print(new_df)
+        assert all(new_df["('C', 'B', 'E')"] == df['C'] * df['B'] * df['E']), print(new_df)
     
         
 test_suite = TestSuite()
