@@ -385,11 +385,11 @@ def get_df_with_interaction_terms(df, listOf_interacting_terms):
     """
     new_df = df.copy()
     all_columns = set(df.columns)
+    print(all_columns)
     for interacting_terms in listOf_interacting_terms:
         all_terms_exist = all(interacting_term in all_columns for interacting_term in interacting_terms)
         if all_terms_exist:
             new_col_name = str(tuple(interacting_terms))
-            
             new_df[new_col_name] = np.prod(new_df[interacting_terms], axis=1)
             # new_df = new_df.drop(interacting_terms, axis = consts.COL)
         else:
@@ -446,7 +446,7 @@ def get_file_names(start, end)->list:
     Returns: 
         List[string]: List of all training files. 
     """
-    files = os.listdir(consts.DATA_PATH_2015)
+    files = os.listdir(consts.RAW_DATA_PATH)
     files = sorted(filter(lambda fname: fname < f"data.{end}" and fname >= f"data.{start}", files))
     return files
 
@@ -461,9 +461,9 @@ def get_train_test_df(start, end, test_date,x_cols, interacting_terms = []):
     (DataFrame, DataFrame): training df and testing df. 
     """
     files = get_file_names(start, end)
-    dfs = [pd.read_csv(consts.DATA_PATH_2015 + f) for f in files]
+    dfs = [pd.read_csv(consts.RAW_DATA_PATH + f) for f in files]
     full_df = pd.concat(dfs)
-    test_df = pd.read_csv(consts.DATA_PATH_2015 + f"data.{test_date}_1200.csv")
+    test_df = pd.read_csv(consts.RAW_DATA_PATH + f"data.{test_date}_1200.csv")
     saved_cols = x_cols + [consts.RESPONSE_NAME]
     # call interacting terms df
     training_df = full_df[saved_cols]
@@ -490,7 +490,7 @@ def get_train_from_testday(testday):
         startYear = year - 1   
     
     startDay = str(startYear) + str(trainMonth) + "01"
-    endDay = str(startYear+1) + str(trainMonth) + "31"
+    endDay = str(startYear+1) + str(trainMonth) + "01"
 
     return [startDay, endDay]
     
