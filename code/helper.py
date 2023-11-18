@@ -85,8 +85,6 @@ class Regression():
         regression_function = self.availableRegressionName_func_map[REGRESSION_TYPE]
         return regression_function(train_X, train_y, sample_weight, allow_internal_update)
     
-
-        # Design choice: Make these methods "Public"?
     def __predict(self, test_X):
         return self.model.predict(test_X)
     
@@ -109,28 +107,28 @@ class Regression():
         
     ### \Private methods   
     
-    def train(self, _train_df, _response_col_name, 
-                _sample_weight = None):
+    def execute(self, _train_df, _response_col_name, 
+                _test_df = None, _sample_weight = None, allow_internal_update = True):
 
         copied_train_df = append_columnOf_ones(_train_df)
-        # copied_test_df = append_columnOf_ones(_test_df) if (_test_df is not None) else None
+        copied_test_df = append_columnOf_ones(_test_df) if (_test_df is not None) else None
         
-        train_X = copied_train_df.drop(_response_col_name, inplace=False, axis=consts.COL)
-        train_y = copied_train_df[_response_col_name]
-        # train_X, train_y, test_X, test_y = self.__train_test_split (
-        #                                     _df = copied_train_df, 
-        #                                     _test_df = copied_test_df, 
-        #                                     _response_col_name = _response_col_name
-        #                                 )
-        # actual_responses = test_y.copy()
+        train_X, train_y, test_X, test_y = self.__train_test_split (
+                                            _df = copied_train_df, 
+                                            _test_df = copied_test_df, 
+                                            _response_col_name = _response_col_name
+                                        )
+        
+        actual_responses = test_y.copy()
 
         regression_function = self.availableRegressionName_func_map[self.regression_type]   
         model_attributes = regression_function(train_X, train_y, _sample_weight) 
         predicted_responses = self.__predict(test_X)
         
-        # if allow_internal_update:
-        #     self.actual_responses = actual_responses
-        #     self.predicted_responses = predicted_responses
+        if allow_internal_update:
+            self.actual_responses = actual_responses
+            # self.betas = betas
+            self.predicted_responses = predicted_responses
         
         return model_attributes
     
@@ -139,7 +137,7 @@ class Regression():
     def get_metric(self):
         """Print metrics defind by Scott
 
-        Returns: [weighted_corr, mean_return, scale_factor]
+        Returns: None
         """
         weighted_corr = self.__get_predictActual_corr()
         weighted_mean_return = self.__get_weighted_mean_return()
@@ -151,40 +149,7 @@ class Regression():
         
         return
         
-    ### Get metrics
-    def get_average_metrics(self, start:str, end:str, x_cols:[str]) -> None:
-        """
-        Reads in Files between the start date and end date, 
-        Uses a trained model to predict start and end.
-        """
-        weighted_corrs, mean_returns, weighted_sf = [], [], []
-        test_dates = get_file_names(start, end)
-        for day in test_dates:
-            test_df = pd.read_csv(consts.RAW_DATA_PATH + day)
-            # test_x = append_columnOf_ones(test_x)
-            test_X = test_df.drop(consts.RESPONSE_NAME, inplace=False, axis=consts.COL)
-            test_X = test_X[x_cols]
-            test_X = append_columnOf_ones(test_X)
-            test_y = test_df[consts.RESPONSE_NAME]
-            self.actual_responses = test_y
-            self.predicted_responses = self.__predict(test_X)
-
-
-            weighted_corrs.append(self.__get_predictActual_corr())
-            mean_returns.append(self.__get_weighted_mean_return())
-            weighted_sf.append( self.__get_weighted_scale_factor())
-
-        avg_wt_corr = np.average(weighted_corrs)
-        avg_returns = np.average(mean_returns)
-        avg_sf = np.average(weighted_sf)
-                
-        print(f"1. Weighted Correlation:\n{avg_wt_corr}\n")
-        print(f"2. Weighted Mean Return:\n{avg_returns}\n")
-        print(f"3. Weighted Scale Factor:\n{avg_sf}\n")
-
-        return
-        
-        
+    ### \Get metrics
 
 def build_feature_map(filename: str, filetype: str = None): #-> dict[str,str]
     """Return a feature_name_str -> feature_description_str map,
@@ -385,7 +350,7 @@ def get_df_with_interaction_terms(df, listOf_interacting_terms):
     """
     new_df = df.copy()
     all_columns = set(df.columns)
-    print(all_columns)
+
     for interacting_terms in listOf_interacting_terms:
         all_terms_exist = all(interacting_term in all_columns for interacting_term in interacting_terms)
         if all_terms_exist:
@@ -471,29 +436,28 @@ def get_train_test_df(start, end, test_date,x_cols, interacting_terms = []):
     return training_df, testing_df
 
 def get_train_from_testday(testday):
-    """Reads the testday from const and parse the day to get the range of train dates
-    Args: 
-    testday: first day of the test month, in form of yyyymmdd
+    """Reads the testday from input and parse the day to get the range of train dates
+    Args:
+    testday: a day of the test month, in form of yyyymmdd. (day is irrelevant)
     """
     year = int(testday[:4])
-    month = testday[4:6]
+    month_str = testday[4:6]
+    month_int = int(month_str)
     day = int(testday[6:])
-
-    if month == "01":
+    if month_str == "01":
         trainMonth = 11
         startYear = year - 2
-    elif month == "02":
+    elif month_str == "02":
         trainMonth = 12
         startYear = year - 2
     else:
-        trainMonth = month - 2
-        startYear = year - 1   
-    
-    startDay = str(startYear) + str(trainMonth) + "01"
-    endDay = str(startYear+1) + str(trainMonth) + "01"
+        trainMonth = month_int - 2
+        startYear = year - 1
 
+    zero = "0" * (trainMonth < 10) # checks if zero is needed
+    startDay = str(startYear) + zero + str(trainMonth) + "01"
+    endDay = str(startYear+1) + zero + str(trainMonth) + "01"
     return [startDay, endDay]
-    
 
     # for the get_file_names method, if the startday does not exist, is that okay
     # do they just return the dates inbetween 2 days even if these dates on the end of ranges does not exist
