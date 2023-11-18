@@ -453,6 +453,7 @@ def get_train_from_testday(testday):
     else:
         trainMonth = month_int - 2
         startYear = year - 1
+
     zero = "0" * (trainMonth < 10) # checks if zero is needed
     startDay = str(startYear) + zero + str(trainMonth) + "01"
     endDay = str(startYear+1) + zero + str(trainMonth) + "01"

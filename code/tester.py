@@ -17,6 +17,7 @@ class TestSuite():
     def run(self):
         self.test_build_feature_map()
         self.test_get_df_with_interaction_terms()
+        self.test_get_train_from_testday()
     
     def test_build_feature_map(self):
         # Edge cases
@@ -46,7 +47,17 @@ class TestSuite():
         new_df = helper.get_df_with_interaction_terms(df, col_pairs)
         assert all(new_df["('A', 'D')"] == df['A'] * df['D']), print(new_df)
         assert all(new_df["('C', 'B', 'E')"] == df['C'] * df['B'] * df['E']), print(new_df)
-    
+
+    def test_get_train_from_testday(self):
+        testday1 = "20140501"
+        train_1_start, train_1_end = helper.get_train_from_testday(testday1)
+        assert(train_1_start == "20130301")
+        assert(train_1_end == "20140301")
+
+        testday2 = "20180101"
+        train_2_start, train_2_end = helper.get_train_from_testday(testday2)
+        assert(train_2_start == "20161101"), print(train_2_start)
+        assert(train_2_end == "20171101"), print(train_2_end)      
         
 test_suite = TestSuite()
 test_suite.run()
