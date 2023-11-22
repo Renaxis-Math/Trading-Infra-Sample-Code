@@ -12,6 +12,10 @@ importlib.reload(consts)
 class Regression():
     def __init__(self, regression_type = 'OLS'):
         #TODO: Whenever you customize this, remember to add your method here!!!
+        """
+        Always follow this same format if you use default sklearn's model:
+        f(train_X, train_y, sample_weight = None, allow_internal_update = True)
+        """
         self.availableRegressionName_func_map = {
             'OLS': self.sklearn_ols_regression,
             'LASSO': self.sklearn_LASSO_regression,
@@ -52,10 +56,10 @@ class Regression():
         if allow_internal_update: self.model = model
         return model.coef_
     
-    def sklearn_LASSO_regression(self, train_X, train_y, cv = 10, sample_weight = None, allow_internal_update = True):
+    def sklearn_LASSO_regression(self, train_X, train_y, sample_weight = None, allow_internal_update = True):
         from sklearn.linear_model import LassoCV
         
-        model = LassoCV(cv=cv, fit_intercept=False) # Higher cv, Lower bias
+        model = LassoCV(cv=consts.CV, fit_intercept=False) # Higher cv, Lower bias
         model.fit(X=train_X, y=train_y, sample_weight=sample_weight)
         if allow_internal_update: self.model = model
         return model.coef_     
@@ -69,7 +73,28 @@ class Regression():
 
         return model.get_xgb_params()
     ### \Sklearn
-    
+
+    ### Not being used -- split to train and evaluate methods
+    def execute(self, _train_df, _response_col_name,
+                    _test_df = None, _sample_weight = None, allow_internal_update = True):
+            copied_train_df = append_columnOf_ones(_train_df)
+            copied_test_df = append_columnOf_ones(_test_df) if (_test_df is not None) else None
+            train_X, train_y, test_X, test_y = self.__train_test_split (
+                                                _df = copied_train_df,
+                                                _test_df = copied_test_df,
+                                                _response_col_name = _response_col_name
+                                            )
+            actual_responses = test_y.copy()
+            regression_function = self.availableRegressionName_func_map[self.regression_type]
+            model_attributes = regression_function(train_X, train_y, _sample_weight)
+            predicted_responses = self.__predict(test_X)
+            if allow_internal_update:
+                self.actual_responses = actual_responses
+                # self.betas = betas
+                self.predicted_responses = predicted_responses
+            return model_attributes
+    ### \Not being used -- split to train and evaluate methods
+
     ### Private methods
     def __train_test_split(self, _df, _test_df, _response_col_name): #TODO: customize this!
         train_X = _df.drop(_response_col_name, inplace=False, axis=consts.COL)
@@ -84,7 +109,6 @@ class Regression():
         REGRESSION_TYPE = 'OLS'
         regression_function = self.availableRegressionName_func_map[REGRESSION_TYPE]
         return regression_function(train_X, train_y, sample_weight, allow_internal_update)
-    
 
         # Design choice: Make these methods "Public"?
     def __predict(self, test_X):
@@ -116,8 +140,9 @@ class Regression():
         
         train_X = copied_train_df.drop(_response_col_name, inplace=False, axis=consts.COL)
         train_y = copied_train_df[_response_col_name]
-        regression_function = self.availableRegressionName_func_map[self.regression_type]   
-        model_attributes = regression_function(train_X, train_y, _sample_weight) 
+        regression_function = self.availableRegressionName_func_map[self.regression_type] 
+        model_attributes = regression_function(train_X = train_X, 
+                                               train_y = train_y, sample_weight = _sample_weight) 
 
         return model_attributes
     
@@ -135,18 +160,28 @@ class Regression():
         return model_attributes
 
     ### Get metrics
-    def evaluateModel(self, test_start:str, test_end:str, x_cols:[str], ):
-
-        filenames = get_file_names(test_start, test_end)
+    def evaluateModel(self, test_start:str, test_end:str, x_cols:[str],data_path:str = None):
+        """Evaluates the model by taking average metrics between the start and end days. 
+        
+        Args: 
+        test_start (str): Start date of evaluation. YYYYMMDD
+        test_end (str): End data of model evaluatino. YYYYMMDD
+        x_cols: list of predictors to use. 
+        data_path: The path to find the test data
+        """
+        if data_path == None:
+           print("No Path given")
+           return 
+        filenames = get_file_names(test_start, test_end, data_path)
         wt_corr, wt_mean_ret, wt_sf = [], [], []
         for file in filenames:
-            df = pd.read_csv(consts.RAW_DATA_PATH + file)
+            df = pd.read_csv(data_path + file)
             test_X = df[x_cols]
             test_X = append_columnOf_ones(test_X)
             predicted_y = self.__predict(test_X)
             self.predicted_responses = predicted_y
             self.actual_responses = df[consts.RESPONSE_NAME]
-            corr,ret,sf = self.get_metric(False)
+            corr,ret,sf = self.get_metric(printMetrics=False)
             wt_corr.append(corr)
             wt_mean_ret.append(ret)
             wt_sf.append(sf)
@@ -390,7 +425,7 @@ def get_df_with_interaction_terms(df, listOf_interacting_terms):
 
     return new_df
 
-def get_file_names(start, end)->list:
+def get_file_names(start, end, data_path)->list:
     """Gets the file names between the start and end. 
     Example parameter: 20150101 is January 1st 2015. yyyymmdd
     
@@ -401,48 +436,11 @@ def get_file_names(start, end)->list:
     Returns: 
         List[string]: List of all training files. 
     """
-    files = os.listdir(consts.RAW_DATA_PATH)
+    files = os.listdir(data_path)
     files = sorted(filter(lambda fname: fname < f"data.{end}" and fname >= f"data.{start}", files))
     return files
 
-# delete this
-def get_train_test_df(start, end, test_date,x_cols, interacting_terms = [], path = consts.RAW_DATA_PATH):
-    """Reads data from files to get training and testing data
-
-    Args: 
-    start: Starting date
-    end: Ending date of training
-    x_cols: x_columns to train on
-    interacting_terms: Columns to multiply together. 
-
-    Returns: 
-    (DataFrame, DataFrame): training df and testing df. 
-    """
-    files = get_file_names(start, end)
-    dfs = [pd.read_csv(path + f) for f in files]
-    full_df = pd.concat(dfs)
-    test_df = pd.read_csv(path + f"data.{test_date}_1200")
-    saved_cols = x_cols + [consts.RESPONSE_NAME]
-    # call interacting terms df
-    training_df = full_df[saved_cols]
-    testing_df = test_df[saved_cols]
-    return training_df, testing_df
-
-def get_file_names(start, end)->list:
-    """Gets the file names between the start and end. 
-    Example parameter: 20150101 is January 1st 2015. yyyymmdd
-    
-    Args: 
-    start (string): Start date of training
-    end (string): Past the end date of training. Not included
-    Returns: 
-        List[string]: List of all training files. 
-    """
-    files = os.listdir(consts.DATA_PATH_2015)
-    files = sorted(filter(lambda fname: fname < f"data.{end}" and fname >= f"data.{start}", files))
-    return files
-
-def get_df(start:str, end:str,x_cols, interacting_terms = [])-> pd.DataFrame:
+def get_df(start:str, end:str,x_cols,data_path, interacting_terms = [])-> pd.DataFrame:
     """Reads data from files to get a df of all days between start and end date
     Args: 
     start: Starting date
@@ -452,11 +450,11 @@ def get_df(start:str, end:str,x_cols, interacting_terms = [])-> pd.DataFrame:
     Returns: 
     Dataframe: training df and testing df. 
     """
-    files = get_file_names(start, end)
-    dfs = [pd.read_csv(consts.RAW_DATA_PATH + f) for f in files]
+    files = get_file_names(start, end, data_path)
+    dfs = [pd.read_csv(data_path+ f) for f in files]
     full_df = pd.concat(dfs)
+    # call interacting terms fn (needs a little more to ensure cols get saved. )
     saved_cols = x_cols + [consts.RESPONSE_NAME]
-    # call interacting terms df
     return full_df[saved_cols]
     
 
@@ -466,22 +464,22 @@ def get_train_from_testday(testday):
     testday: a day of the test month, in form of yyyymmdd. (day is irrelevant)
     """
     year = int(testday[:4])
-    month = int(testday[4:6])
+    month_str = testday[4:6]
+    month_int = int(month_str)
     day = int(testday[6:])
-
-    if month == "01":
+    if month_str == "01":
         trainMonth = 11
         startYear = year - 2
-    elif month == "02":
+    elif month_str == "02":
         trainMonth = 12
         startYear = year - 2
     else:
-        trainMonth = month - 2
+        trainMonth = month_int - 2
         startYear = year - 1   
     zero = "0" * (trainMonth < 10) # checks if zero is needed
     startDay = str(startYear) + zero + str(trainMonth) + "01"
 
-    endDay = str(startYear+1) + zero + str(trainMonth) + "31"
+    endDay = str(startYear+1) + zero + str(trainMonth) + "01"
 
     return [startDay, endDay]
     
