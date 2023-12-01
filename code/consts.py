@@ -3,36 +3,11 @@
 
 ROW = 0
 COL = 1
-RAW_DATA_PATH = "" #TODO: Need discussion
-DATA_PATH_2015 = "../data/"
-CLEANED_DATA_PATH = "../data/cleaned_data/training_data.csv"
-#TESTING_DATA_PATH = "../data/test_data" Idea for test data
-
+RAW_DATA_PATH = "/Users/rosy/Clinic/data/hmc/"
+#DATA_PATH_2015 = "/Users/rosy/Clinic/data/hmc/"
+CLEANED_DATA_PATH = "/Users/rosy/Clinic/data/cleaned_data/"
 RESPONSE_NAME = "tonight"
-CV = 10
 
-# RYAN
-RAW_DATA_PATH_RYAN = "../../clinicDataCopy/"
-# \RYAN
-
-# HOANG
-RAW_DATA_PATH_HOANG = ""
-# \HOANG
-
-# ROSY
-RAW_DATA_PATH_ROSY= ""
-# \ROSY
-
-# HENRY
-RAW_DATA_PATH_HENRY = ""
-# \HENRY
-
-# TOMMY
-RAW_DATA_PATH_TOMMY = ""
-# \TOMMY
-
-PATH_MAP = {"RYAN":RAW_DATA_PATH_RYAN,
-            "HOANG":RAW_DATA_PATH_HOANG,
-            "ROSY":RAW_DATA_PATH_ROSY,
-            "HENRY":RAW_DATA_PATH_HENRY,
-            "TOMMY": RAW_DATA_PATH_TOMMY}
+RAW_DATA_PATH_ROSY = "/Users/rosy/Clinic/data/hmc/"
+#DATA_PATH_2015_ROSY = "/Users/rosy/Clinic/data/hmc/"
+CLEANED_DATA_PATH_ROSY = "/Users/rosy/Clinic/data/cleaned_data/"
