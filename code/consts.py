@@ -24,7 +24,7 @@ RAW_DATA_PATH_ROSY= ""
 # \ROSY
 
 # HENRY
-RAW_DATA_PATH_HENRY = ""
+RAW_DATA_PATH_HENRY = "../data/hmc/"
 # \HENRY
 
 # TOMMY
