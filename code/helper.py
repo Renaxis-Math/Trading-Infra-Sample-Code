@@ -160,7 +160,7 @@ class Regression():
         return model_attributes
 
     ### Get metrics
-    def evaluateModel(self, test_start:str, test_end:str, x_cols:[str],data_path:str = None):
+    def evaluate_model(self, test_start:str, test_end:str, x_cols:[str],data_path:str, list_of_interacting_terms:[[str]]):
         """Evaluates the model by taking average metrics between the start and end days. 
         
         Args: 
@@ -173,19 +173,25 @@ class Regression():
            print("No Path given")
            return 
         filenames = get_file_names(test_start, test_end, data_path)
+
         wt_corr, wt_mean_ret, wt_sf = [], [], []
+
         for file in filenames:
             df = pd.read_csv(data_path + file)
+            df = get_df_with_interaction_terms(df, list_of_interacting_terms)
             test_X = df[x_cols]
             test_X = append_columnOf_ones(test_X)
+
             predicted_y = self.__predict(test_X)
+
             self.predicted_responses = predicted_y
             self.actual_responses = df[consts.RESPONSE_NAME]
+
             corr,ret,sf = self.get_metric(printMetrics=False)
-            wt_corr.append(corr)
+            wt_corr.append(corr[0][1])
             wt_mean_ret.append(ret)
             wt_sf.append(sf)
-
+        
         avg_wt_corr = np.average(wt_corr) # Could be cleaner with mapping. 
         avg_wt_mean = np.average(wt_mean_ret)
         avg_wt_sf = np.average(wt_sf)
