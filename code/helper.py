@@ -173,12 +173,13 @@ class Regression():
            print("No Path given")
            return 
         filenames = get_file_names(test_start, test_end, data_path)
+        print(f"filenames = {filenames}")
 
         wt_corr, wt_mean_ret, wt_sf = [], [], []
 
         for file in filenames:
             df = pd.read_csv(data_path + file)
-            df = get_df_with_interaction_terms(df, list_of_interacting_terms)
+            df, _ = get_df_with_interaction_terms(df, list_of_interacting_terms)
             test_X = df[x_cols]
             test_X = append_columnOf_ones(test_X)
 
@@ -216,8 +217,6 @@ class Regression():
         
         return (weighted_corr, weighted_mean_return, weighted_scale_factor)
         
-        
-
 def build_feature_map(filename: str, filetype: str = None): #-> dict[str,str]
     """Return a feature_name_str -> feature_description_str map,
     given that each line in the input file 'filename' has this STRICT format:
@@ -405,31 +404,31 @@ def append_columnOf_ones(X):
     """
     return X.assign(b0=1)
 
-def get_df_with_interaction_terms(df, listOf_interacting_terms):
+def get_df_with_interaction_terms(df, interacting_terms_list):
     """Return a new DataFrame that has interacting column pairs
 
     Args:
         df (DataFrame): original training data
-        listOf_interacting_terms (list of list): list of column pairs
+        interacting_terms_list (list of list): list of column pairs
 
     Returns:
         DataFrame: resulting DataFrame
     """
     new_df = df.copy()
-    all_columns = set(df.columns)
-    for interacting_terms in listOf_interacting_terms:
-        all_terms_exist = all(interacting_term in all_columns for interacting_term in interacting_terms)
+    new_col_names = []
+    for interacting_terms in interacting_terms_list:
+        # all_terms_exist = np.all(np.isin(np.ravel(interacting_terms), df.columns))
+        all_terms_exist = True
         if all_terms_exist:
             new_col_name = str(tuple(interacting_terms))
-            
+            new_col_names.append(new_col_name)
             new_df[new_col_name] = np.prod(new_df[interacting_terms], axis=1)
-            # new_df = new_df.drop(interacting_terms, axis = consts.COL)
+            # new_df = new_df.drop(interacting_terms, axis = consts.COL, inplace=False)
         else:
-            missing_indices = np.where(~all_terms_exist)
-            print(f"{np.take(interacting_terms, missing_indices)} missing or already been grouped!")
-            continue
+            print(f"{interacting_terms} missing!")
+            return df
 
-    return new_df
+    return new_df, new_col_names
 
 def get_file_names(start, end, data_path)->list:
     """Gets the file names between the start and end. 

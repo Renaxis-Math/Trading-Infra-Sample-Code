@@ -16,7 +16,7 @@ RAW_DATA_PATH_RYAN = "../../clinicDataCopy/"
 # \RYAN
 
 # HOANG
-RAW_DATA_PATH_HOANG = ""
+RAW_DATA_PATH_HOANG = "../data/used_data/"
 # \HOANG
 
 # ROSY
