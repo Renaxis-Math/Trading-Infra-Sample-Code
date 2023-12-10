@@ -9,7 +9,28 @@ ROW = 0
 COL = 1
 CV = 10
 
-FOLDER_ID = "16TQJZlcZCRumroY4E-gfzf65kvn4K2EZ"
+# RYAN
+RAW_DATA_PATH_RYAN = "../../clinicDataCopy/"
+# \RYAN
 
-# If modifying these SCOPES, delete the file token.pickle.
-SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
+# HOANG
+RAW_DATA_PATH_HOANG = "../data/used_data/"
+# \HOANG
+
+# ROSY
+RAW_DATA_PATH_ROSY= ""
+# \ROSY
+
+# HENRY
+RAW_DATA_PATH_HENRY = "../data/hmc/"
+# \HENRY
+
+# TOMMY
+RAW_DATA_PATH_TOMMY = ""
+# \TOMMY
+
+PATH_MAP = {"RYAN":RAW_DATA_PATH_RYAN,
+            "HOANG":RAW_DATA_PATH_HOANG,
+            "ROSY":RAW_DATA_PATH_ROSY,
+            "HENRY":RAW_DATA_PATH_HENRY,
+            "TOMMY": RAW_DATA_PATH_TOMMY}
