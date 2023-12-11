@@ -102,7 +102,6 @@ class Regression(Data):
     def __init__(self, *, data_path: str, regression_type: str = 'OLS', hyperparam_dict: Optional[dict] = None):
         super().__init__(data_path)
         
-        self.init_hyperparam = hyperparam_dict
         self.regressionName_func_map = {
             'OLS': self._sklearn_ols_regression,
             'LASSO': self._sklearn_LASSO_regression,
@@ -112,11 +111,13 @@ class Regression(Data):
         if self.regression_type is None:
             print(f"Available Regression Inputs: {regressionName_func_map.keys()}\n")
             raise Exception(f"{regression_input} does not exist. Please re-initialize.\n")
+        else: 
+            print(f"You're using: {self.regression_type}")
         
         self.feature_col_names = []
         self.interacting_terms_list = []
         
-        self.saved_model = None
+        self.saved_model = self.regressionName_func_map[self.regression_type](hyperparam_dict)
         self.predicted_y_list = []
         self.actual_y_list = []
         
@@ -134,18 +135,33 @@ class Regression(Data):
 
     def _sklearn_ols_regression(self, hyperparam_dict: Optional[dict] = None):
         from sklearn.linear_model import LinearRegression
-        if hyperparam_dict is None: return LinearRegression()
-        return LinearRegression(**hyperparam_dict)
+        
+        returning_model = None
+        if hyperparam_dict is None: returning_model = LinearRegression()
+        else: returning_model = LinearRegression(**hyperparam_dict)
+        
+        print(f"Available hyperparams: {vars(returning_model)}")
+        return returning_model
 
     def _sklearn_LASSO_regression(self, hyperparam_dict: Optional[dict] = None):
         from sklearn.linear_model import LassoCV
-        if hyperparam_dict is None: return LassoCV()
-        return LassoCV(**hyperparam_dict)
+        
+        returning_model = None
+        if hyperparam_dict is None: returning_model = LassoCV()
+        else: returning_model = LassoCV(**hyperparam_dict)
+        
+        print(f"Available hyperparams: {vars(returning_model)}")
+        return returning_model
 
     def _xgboost_regression(self, hyperparam_dict: Optional[dict] = None):
         from xgboost import XGBRegressor 
-        if hyperparam_dict is None: return XGBRegressor()
-        return XGBRegressor(**hyperparam_dict)
+        
+        returning_model = None
+        if hyperparam_dict is None: returning_model = XGBRegressor()
+        else: returning_model = XGBRegressor(**hyperparam_dict)
+        
+        print(f"Available hyperparams: {vars(returning_model)}")
+        return returning_model
 
     def _get_df_with_interaction_terms(self, df: pd.DataFrame, interacting_terms_list: list,
                                        will_drop_single_interacting_term: bool = False) -> pd.DataFrame:
@@ -203,18 +219,17 @@ class Regression(Data):
         return np.corrcoef(predicted_y, actual_y)[0, 1]
 
     def _get_mean_return(self, predicted_y, actual_y):
-        return np.sum((np.abs(actual_y) / len(predicted_y)) * \
-                    (np.sign(actual_y) * np.sign(predicted_y)))
+        return np.mean(np.abs(actual_y) * (np.sign(actual_y) * np.sign(predicted_y)))
 
     def _get_scale_factor(self, predicted_y, actual_y):
-        from sklearn import linear_model
+        from sklearn.linear_model import LinearRegression
         
-        model = linear_model.LinearRegression(fit_intercept=False)
+        model = LinearRegression(fit_intercept=False)
         model.fit(X=pd.DataFrame({"predicted_y": predicted_y}), y=actual_y)
         return model.coef_    
     
     def train(self, feature_col_names: Optional[list[str]] = None, interacting_terms_list: Optional[list] = None, 
-              *, dataframe: Optional[pd.DataFrame] = None, hyperparam_dict: Optional[dict] = None):
+              *, dataframe: Optional[pd.DataFrame] = None, hyperparam_dict: Optional[dict] = None) -> None:
 
         """Note: this method prefer self.train_df over input 'dataframe'.
         """
@@ -232,13 +247,14 @@ class Regression(Data):
         if len(training_features) > 0: train_X = training_df[training_features]
         else: train_X = training_df.drop(consts.RESPONSE_NAME, inplace = False, axis = consts.COL)
         
-        model = self.regressionName_func_map[self.regression_type](self.init_hyperparam)
-        if hyperparam_dict is None: model.fit(train_X, train_y)
-        else: model.fit(train_X, train_y, **hyperparam_dict)
+        if hyperparam_dict is None: self.saved_model.fit(train_X, train_y)
+        else: self.saved_model.fit(train_X, train_y, **hyperparam_dict)
         
-        self.saved_model = model
         self.interacting_terms_list = interacting_terms_list
         self.feature_col_names = training_features
+        
+        print(f"Features being used: {self.feature_col_names}")
+        return
         
     def get_metric(self, *, dataframes: Optional[list[pd.DataFrame] | pd.DataFrame] = None,
                    hyperparam_dict: Optional[dict] = None) -> None:
@@ -280,14 +296,14 @@ class Regression(Data):
         assert len(self.predicted_y_list) == len(self.actual_y_list), \
         print(f"len(predicted_y_list) != len(actual_y_list)\n")
         
-        response_corr = np.mean([self._get_response_corr(self.predicted_y_list[i], self.actual_y_list[i]) 
-                                 for i in range(len(self.predicted_y_list))])
-
-        mean_return = np.mean([self._get_mean_return(self.predicted_y_list[i], self.actual_y_list[i]) 
-                               for i in range(len(self.predicted_y_list))])
-    
-        scale_factor = np.mean([self._get_scale_factor(self.predicted_y_list[i], self.actual_y_list[i]) 
-                                for i in range(len(self.predicted_y_list))])
+        predict_actual_pairs = list(zip(self.predicted_y_list, self.actual_y_list))
+        
+        response_corr = np.mean([self._get_response_corr(*predict_actual_pair)
+                                 for predict_actual_pair in predict_actual_pairs])
+        mean_return = np.mean([self._get_mean_return(*predict_actual_pair)
+                               for predict_actual_pair in predict_actual_pairs])
+        scale_factor = np.mean([self._get_scale_factor(*predict_actual_pair)
+                                for predict_actual_pair in predict_actual_pairs])
         
         print(f"response_corr = {response_corr}")
         print(f"mean_return = {mean_return}")

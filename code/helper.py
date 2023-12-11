@@ -405,7 +405,7 @@ def append_columnOf_ones(X):
     """
     return X.assign(b0=1)
 
-def get_df_with_interaction_terms(df: pd.DataFrame, interacting_terms_list, will_drop_single_interacting_term = False):
+def get_df_with_interaction_terms(df: pd.DataFrame, interacting_terms_list:, will_drop_single_interacting_term = False):
     """Return a new DataFrame that has interacting column pairs
 
     Args:
