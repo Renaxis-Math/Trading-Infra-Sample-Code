@@ -37,6 +37,7 @@ class Regression():
             self.regression_type = regression_type.capitalize()
         else:
             print(f"{regression_type} does not exist.")
+            
     def __repr__(self) -> str:
         return f"{self.regression_type} Regression Model"
     
@@ -404,7 +405,7 @@ def append_columnOf_ones(X):
     """
     return X.assign(b0=1)
 
-def get_df_with_interaction_terms(df, interacting_terms_list):
+def get_df_with_interaction_terms(df: pd.DataFrame, interacting_terms_list, will_drop_single_interacting_term = False):
     """Return a new DataFrame that has interacting column pairs
 
     Args:
@@ -417,13 +418,13 @@ def get_df_with_interaction_terms(df, interacting_terms_list):
     new_df = df.copy()
     new_col_names = []
     for interacting_terms in interacting_terms_list:
-        # all_terms_exist = np.all(np.isin(np.ravel(interacting_terms), df.columns))
-        all_terms_exist = True
+        all_terms_exist = np.all(np.isin(np.ravel(interacting_terms), df.columns))
         if all_terms_exist:
             new_col_name = str(tuple(interacting_terms))
             new_col_names.append(new_col_name)
-            new_df[new_col_name] = np.prod(new_df[interacting_terms], axis=1)
-            # new_df = new_df.drop(interacting_terms, axis = consts.COL, inplace=False)
+            new_df[new_col_name] = np.prod(new_df[interacting_terms], axis=consts.COL)
+            
+            if will_drop_single_interacting_term: new_df.drop(interacting_terms, axis = consts.COL, inplace=True)
         else:
             print(f"{interacting_terms} missing!")
             return df
@@ -445,7 +446,7 @@ def get_file_names(start, end, data_path)->list:
     files = sorted(filter(lambda fname: fname < f"data.{end}" and fname >= f"data.{start}", files))
     return files
 
-def get_df(start:str, end:str,x_cols,data_path, interacting_terms = [])-> pd.DataFrame:
+def get_df(start:str, end:str, x_cols, data_path, interacting_terms = [])-> pd.DataFrame:
     """Reads data from files to get a df of all days between start and end date
     Args: 
     start: Starting date
