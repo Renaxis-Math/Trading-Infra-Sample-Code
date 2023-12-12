@@ -33,6 +33,7 @@ class Data:
         self.sorted_file_datetimes = [self._extract_datetime(file_name) \
                                       for file_name in self.sorted_file_names]
 
+        self.data_path = None
         self.train_df = None
         self.test_dfs = []
         
@@ -44,6 +45,8 @@ class Data:
             file_names = os.listdir(data_path)
             data_file_names = list(filter(lambda file_name: consts.DATA_FILTER_KEYWORD in file_name, file_names))
             data_file_names.sort(reverse = False)
+            
+            self.data_path = data_path
             return data_file_names
         except FileNotFoundError: print(f"The directory {data_path} does not exist.")
     
@@ -60,7 +63,7 @@ class Data:
     def _is_rightDate_smallerThan_leftDate(self, left_date: datetime, right_date: datetime) -> bool:
         return right_date < left_date   
         
-    def _filter_file_names(self, start_date: datetime | str, end_date: datetime | str) -> list:
+    def _filter_file_names(self, *, start_date: datetime | str, end_date: datetime | str) -> list:
         if isinstance(start_date, str): start_date = datetime.strptime(start_date, r'%Y%m%d')
         if isinstance(end_date, str): end_date = datetime.strptime(end_date, r'%Y%m%d')
         
@@ -74,23 +77,26 @@ class Data:
         #\ Debugging
         return self.sorted_file_names[leftBound_i : rightBound_i + 1]
     
-    def get_df_between_date(self, *, data_path: str,
-                            start_date: datetime | str, end_date: datetime | str) -> list[pd.DataFrame]:
+    def get_df_between_date(self, *,
+                            data_path: str,
+                            start_date: datetime | str,
+                            end_date: datetime | str) -> list[pd.DataFrame]:
     
-        filtered_file_names = self._filter_file_names(start_date, end_date)
+        filtered_file_names = self._filter_file_names(start_date = start_date, end_date = end_date)
         dfs = [pd.read_csv(data_path + file_name) for file_name in filtered_file_names]
         
-        self.test_dfs = list(dfs)
+        self.test_dfs = [df for df in dfs]
         return dfs
     
-    def update_and_get_train_df(self, data_path: str, test_start_yyyymmdd: str, 
-                                                    movingBack_dayCount: int) -> pd.DataFrame:
+    def update_and_get_train_df(self, data_path: str, test_start_yyyymmdd: str, *,
+                                    movingBack_dayCount: int,
+                                    years_count: int) -> pd.DataFrame:
 
         test_start_date = datetime.strptime(test_start_yyyymmdd, r'%Y%m%d')
         train_end_date = test_start_date - timedelta(days = movingBack_dayCount)
-        train_start_date = train_end_date - timedelta(days = consts.YEAR_DAY)
+        train_start_date = train_end_date - timedelta(days = consts.YEAR_DAY * years_count)
         
-        filtered_file_names = self._filter_file_names(train_start_date, train_end_date)
+        filtered_file_names = self._filter_file_names(start_date = train_start_date, end_date = train_end_date)
         dfs = [pd.read_csv(data_path + file_name) for file_name in filtered_file_names]
         train_df = pd.concat(dfs, axis = consts.ROW)
         
@@ -99,8 +105,12 @@ class Data:
 
 class Regression(Data):
     
-    def __init__(self, *, data_path: str, regression_type: str = 'OLS', hyperparam_dict: Optional[dict] = None):
-        super().__init__(data_path)
+    def __init__(self, *, 
+                 data_path: Optional[str] = None, 
+                 regression_type: str = 'OLS', 
+                 hyperparam_dict: Optional[dict] = None):
+
+        if data_path is not None: super().__init__(data_path)
         
         self.regressionName_func_map = {
             'OLS': self._sklearn_ols_regression,
@@ -163,7 +173,8 @@ class Regression(Data):
         print(f"Available hyperparams: {vars(returning_model)}")
         return returning_model
 
-    def _get_df_with_interaction_terms(self, df: pd.DataFrame, interacting_terms_list: list,
+    def _get_df_with_interaction_terms(self, df: pd.DataFrame, 
+                                       interacting_terms_list: list[list[str]],
                                        will_drop_single_interacting_term: bool = False) -> pd.DataFrame:
 
         """Return a new DataFrame that has interacting column pairs
@@ -192,14 +203,15 @@ class Regression(Data):
         
         return new_df, new_col_names
 
-    def _predict(self, *, dataframes: list[pd.DataFrame] | pd.DataFrame, 
-                hyperparam_dict: Optional[dict] = None) -> list:
+    def _predict(self, dataframes: list[pd.DataFrame] | pd.DataFrame, *, 
+                 hyperparam_dict: Optional[dict] = None) -> list:
 
         assert self.saved_model is not None, print("No model being trained yet!\n")
-        
         predicted_y_list = []
 
         if isinstance(dataframes, pd.DataFrame):
+            assert len(self.feature_col_names) == len(dataframes.columns)
+            
             if hyperparam_dict is None: predicted_y = self.saved_model.predict(dataframes)
             else: predicted_y = self.saved_model.predict(dataframes, **hyperparam_dict)
             
@@ -207,6 +219,7 @@ class Regression(Data):
         else:
             for i in range(len(dataframes)):
                 dataframe = dataframes[i]
+                assert len(self.feature_col_names) == len(dataframe.columns)
 
                 if hyperparam_dict is None: predicted_y = self.saved_model.predict(dataframe)
                 else: predicted_y = self.saved_model.predict(dataframe, **hyperparam_dict)
@@ -228,24 +241,33 @@ class Regression(Data):
         model.fit(X=pd.DataFrame({"predicted_y": predicted_y}), y=actual_y)
         return model.coef_    
     
-    def train(self, feature_col_names: Optional[list[str]] = None, interacting_terms_list: Optional[list] = None, 
-              *, dataframe: Optional[pd.DataFrame] = None, hyperparam_dict: Optional[dict] = None) -> None:
+    def train(self, dataframe: Optional[pd.DataFrame] = None, *,
+                    feature_col_names: Optional[list[str]] = None,
+                    interacting_terms_list: Optional[list[list[str]]] = None,
+                    hyperparam_dict: Optional[dict] = None) -> None:
 
         """Note: this method prefer self.train_df over input 'dataframe'.
         """
         copied_dataframe = dataframe.copy()
         if copied_dataframe is None and self.train_df is None: raise Exception("Can't train when nothing is given.\n")
-        training_features = []
-        if len(feature_col_names) > 0: training_features.extend(feature_col_names)
         
         training_df = self.train_df if self.train_df is not None else copied_dataframe
+        training_features = []
+        
         if interacting_terms_list is not None: 
             training_df, new_col_names = self._get_df_with_interaction_terms(training_df, interacting_terms_list)
             training_features.extend(new_col_names)
-
+        
         train_y = training_df[consts.RESPONSE_NAME]
-        if len(training_features) > 0: train_X = training_df[training_features]
-        else: train_X = training_df.drop(consts.RESPONSE_NAME, inplace = False, axis = consts.COL)
+        if consts.RESPONSE_NAME in set(training_df.columns):
+            train_X = training_df.drop(consts.RESPONSE_NAME, axis=consts.COL, inplace=False)
+            
+        if feature_col_names is not None: 
+            training_features.extend(feature_col_names)
+            train_X = training_df[training_features]
+        else:
+            train_X = training_df.drop(consts.RESPONSE_NAME, inplace = False, axis = consts.COL)
+            training_features.extend(train_X.columns)
         
         if hyperparam_dict is None: self.saved_model.fit(train_X, train_y)
         else: self.saved_model.fit(train_X, train_y, **hyperparam_dict)
@@ -256,42 +278,45 @@ class Regression(Data):
         print(f"Features being used: {self.feature_col_names}")
         return
         
-    def get_metric(self, *, dataframes: Optional[list[pd.DataFrame] | pd.DataFrame] = None,
-                   hyperparam_dict: Optional[dict] = None) -> None:
-        """Note: this method perfer self.test_dfs over input 'dataframes'
+    def get_metric(self, dataframes: Optional[list[pd.DataFrame] | pd.DataFrame] = None, *, 
+                        hyperparam_dict: Optional[dict] = None) -> None:
 
-        Args:
-            dataframes (list[pd.DataFrame] | pd.DataFrame): _description_
-
-        Returns:
-            _type_: _description_
-        """
         if dataframes is None and self.test_dfs == []: raise Exception("Can't test when nothing is given.\n")
         input_dfs = self.test_dfs if len(self.test_dfs) > 0 else dataframes
         
         if isinstance(dataframes, pd.DataFrame):
             input_dfs = dataframes.copy()
+            
             self.actual_y_list = [input_dfs[consts.RESPONSE_NAME]]
+            if consts.RESPONSE_NAME in set(input_dfs.columns): 
+                input_dfs.drop(consts.RESPONSE_NAME, axis=consts.COL, inplace=True)
             
             if len(self.interacting_terms_list) > 0:
                 input_dfs, _ = self._get_df_with_interaction_terms(input_dfs, self.interacting_terms_list)
             
             testing_df = input_dfs[self.feature_col_names]
-            self.predicted_y_list = self._predict(dataframes = testing_df, hyperparam_dict = hyperparam_dict)
+            self.predicted_y_list = self._predict(testing_df, hyperparam_dict = hyperparam_dict)
+
         else:
-            input_dfs = list(dataframes)
-            self.actual_y_list = [input_df[consts.RESPONSE_NAME] for input_df in input_dfs]
+            input_dfs = [dataframe.copy() for dataframe in dataframes]
             
-            if len(self.interacting_terms_list) > 0:
+            self.actual_y_list = [input_df[consts.RESPONSE_NAME] for input_df in input_dfs]
+            for i in range(len(input_dfs)):
+                input_df = input_dfs[i]
+                if consts.RESPONSE_NAME in set(input_df.columns): 
+                    input_df.drop(consts.RESPONSE_NAME, axis=consts.COL, inplace=True)                
+            
+            if self.interacting_terms_list is not None:
                 for i in range(len(input_dfs)):
                     input_df = input_dfs[i]
+                    
                     assert isinstance(input_df, pd.DataFrame), print(f"input_df {i} not a DataFrame.\n")
                     temp_input_df, _ = self._get_df_with_interaction_terms(input_df, self.interacting_terms_list)
     
                     test_df = temp_input_df[self.feature_col_names]
                     input_dfs[i] = test_df
 
-            self.predicted_y_list = self._predict(dataframes = input_dfs, hyperparam_dict = hyperparam_dict)
+            self.predicted_y_list = self._predict(input_dfs, hyperparam_dict = hyperparam_dict)
 
         assert len(self.predicted_y_list) == len(self.actual_y_list), \
         print(f"len(predicted_y_list) != len(actual_y_list)\n")
