@@ -118,8 +118,11 @@ class Regression():
         return np.corrcoef(self.predicted_responses, self.actual_responses)
     
     def __get_weighted_mean_return(self):
-        return np.sum((np.abs(self.actual_responses) / len(self.actual_responses)) * \
-                (np.sign(self.actual_responses) * np.sign(self.predicted_responses)))
+            abs_yy = np.abs(self.actual_responses)
+            sign_yy = np.sign(self.actual_responses)
+            sign_ss = np.sign(self.predicted_responses)
+
+            return np.mean(abs_yy * sign_yy * sign_ss)
         
     def __get_weighted_scale_factor(self):
         if (self.actual_responses is not None) and \
@@ -187,7 +190,7 @@ class Regression():
             self.predicted_responses = predicted_y
             self.actual_responses = df[consts.RESPONSE_NAME]
 
-            corr,ret,sf = self.get_metric(printMetrics=False)
+            corr,ret,sf = self.get_metric(printMetrics=True)
             wt_corr.append(corr[0][1])
             wt_mean_ret.append(ret)
             wt_sf.append(sf)
@@ -195,9 +198,9 @@ class Regression():
         avg_wt_corr = np.average(wt_corr) # Could be cleaner with mapping. 
         avg_wt_mean = np.average(wt_mean_ret)
         avg_wt_sf = np.average(wt_sf)
-        print(f"Average Weighted Correlation: {avg_wt_corr}")
-        print(f"Average Mean Return: {avg_wt_mean}")
-        print(f"Average weighted Scale Factor: {avg_wt_sf}")
+        # print(f"Average Weighted Correlation: {avg_wt_corr}")
+        # print(f"Average Mean Return: {avg_wt_mean}")
+        # print(f"Average weighted Scale Factor: {avg_wt_sf}")
         return avg_wt_corr,avg_wt_mean,avg_wt_sf
 
     def get_metric(self, printMetrics = True):
