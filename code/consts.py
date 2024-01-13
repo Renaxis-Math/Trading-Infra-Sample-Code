@@ -1,6 +1,8 @@
 # This file contains all defined constants 
 # to be used in any files within the project
 
+YEAR_DAY = 365
+DATA_FILTER_KEYWORD = "data"
 ROW = 0
 COL = 1
 RAW_DATA_PATH = "" #TODO: Need discussion
@@ -16,7 +18,7 @@ RAW_DATA_PATH_RYAN = "../../clinicDataCopy/"
 # \RYAN
 
 # HOANG
-RAW_DATA_PATH_HOANG = ""
+RAW_DATA_PATH_HOANG = "../data/test_data/"
 # \HOANG
 
 # ROSY
