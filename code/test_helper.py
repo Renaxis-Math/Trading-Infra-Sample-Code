@@ -84,14 +84,16 @@ class Data:
         return answers
     
     # Helper Functions
-    def _extract_datetime(self, file_name: str) -> Optional[datetime]:
-        """_summary_
+    def _extract_datetime(self, file_name: str) -> Optional[datetime]:  
+        """
+        Extract the YYYYMMDD datetime from a file name.
 
         Args:
-            file_name (str): _description_
+            file_name (str): The file name containing a YYYYMMDD datetime.
 
         Returns:
-            Optional[datetime]: _description_
+            Optional[datetime]: A datetime object representing the extracted YYYYMMDD datetime.
+                Returns None if no valid datetime is found.
         """
         import re
         match = re.search(r'\d{8}', file_name)
@@ -108,14 +110,17 @@ class Data:
         return right_date < left_date   
         
     def _filter_file_names(self, *, start_date: datetime | str, end_date: datetime | str) -> list:
-        """_summary_
+        """
+        Filter out the files within the specified date range from the sorted_file_names list.
 
         Args:
-            start_date (datetime | str): _description_
-            end_date (datetime | str): _description_
+            start_date (datetime | str): The start date of the range (inclusive).
+                                        It can be either a datetime object or a string in the format '%Y%m%d'.
+            end_date (datetime | str): The end date of the range (inclusive).
+                                    It can be either a datetime object or a string in the format '%Y%m%d'.
 
         Returns:
-            list: _description_
+            list: A list of file names within the specified date range.
         """
         if isinstance(start_date, str): start_date = datetime.strptime(start_date, r'%Y%m%d')
         if isinstance(end_date, str): end_date = datetime.strptime(end_date, r'%Y%m%d')
@@ -140,10 +145,18 @@ class Data:
                             data_path: str,
                             start_date: datetime | str,
                             end_date: datetime | str) -> list[pd.DataFrame]:
-        """_summary_
+        """
+        Get DataFrames from files within a specified date range.
+
+        Args:
+            data_path (str): The path to the directory containing the data files.
+            start_date (datetime | str): The start date of the range (inclusive).
+                                        It can be either a datetime object or a string in the format '%Y%m%d'.
+            end_date (datetime | str): The end date of the range (inclusive).
+                                    It can be either a datetime object or a string in the format '%Y%m%d'.
 
         Returns:
-            _type_: _description_
+            list[pd.DataFrame]: A list of DataFrames read from files within the specified date range.
         """
         filtered_file_names = self._filter_file_names(start_date = start_date, end_date = end_date)
         dfs = [pd.read_csv(data_path + file_name) for file_name in filtered_file_names]
@@ -154,10 +167,17 @@ class Data:
     def update_and_get_train_df(self, data_path: str, test_start_yyyymmdd: str, *,
                                     movingBack_dayCount: int,
                                     years_count: int) -> pd.DataFrame:
-        """_summary_
+        """
+        get the training DataFrame using the test_start date and the days between trainning and testing data.
+
+        Args:
+            data_path (str): The path to the directory containing the data files.
+            test_start_yyyymmdd (str): The start date of the test period in the format '%Y%m%d'.
+            movingBack_dayCount (int): The number of days to move back from the test start date to determine the training end date.
+            years_count (int): The number of years of data to include in the training set.
 
         Returns:
-            _type_: _description_
+            pd.DataFrame: The training DataFrame.
         """
         test_start_date = datetime.strptime(test_start_yyyymmdd, r'%Y%m%d')
         train_end_date = test_start_date - timedelta(days = movingBack_dayCount)
@@ -252,13 +272,16 @@ class Regression(Data):
     def _get_df_with_interaction_terms(self, df: pd.DataFrame, 
                                        interacting_terms_list: list[list[str]],
                                        will_drop_single_interacting_term: bool = False) -> tuple[pd.DataFrame, list]:
-        """_summary_
+        """
+        Get DataFrame with interaction terms - a product of two columns.
 
         Args:
-            list (_type_): _description_
+            df (pd.DataFrame): The input DataFrame.
+            interacting_terms_list (list[list[str]]): List of lists containing column names for interaction terms.
+            will_drop_single_interacting_term (bool, optional): Whether to drop single interacting terms. 
 
         Returns:
-            _type_: _description_
+            tuple[pd.DataFrame, list]: A tuple containing the new DataFrame with interaction terms and a list of new column names.
         """
         new_df = df.copy()
         new_col_names = []
@@ -280,14 +303,15 @@ class Regression(Data):
 
     def _predict(self, dataframes: list[pd.DataFrame] | pd.DataFrame, *, 
                  hyperparam_dict: Optional[dict] = None) -> list:
-        """_summary_
+        """
+        Predict stock prices using the trained model.
 
         Args:
-            dataframes (list[pd.DataFrame] | pd.DataFrame): _description_
-            hyperparam_dict (Optional[dict], optional): _description_. Defaults to None.
+            dataframes (list[pd.DataFrame] | pd.DataFrame): Input DataFrame or list of DataFrames.
+            hyperparam_dict (Optional[dict], optional): Hyperparameters for the regression model. Defaults to None.
 
         Returns:
-            list: _description_
+            list: List of predicted stock price values.
         """
         assert self.saved_model is not None, print("No model being trained yet!\n")
         predicted_y_list = []
@@ -337,10 +361,17 @@ class Regression(Data):
                     feature_col_names: list[str] = [],
                     interacting_terms_list: list[list[str]] = [],
                     hyperparam_dict: Optional[dict] = None) -> None:
-        """_summary_
+        """
+        Train the regression model.
+
+        Args:
+            dataframe (Optional[pd.DataFrame], optional): Training data. Defaults to None.
+            feature_col_names (list[str], optional): List of feature column names. Defaults to an empty list.
+            interacting_terms_list (list[list[str]], optional): List of interacting terms. Defaults to an empty list.
+            hyperparam_dict (Optional[dict], optional): Hyperparameters for training. Defaults to None.
 
         Raises:
-            Exception: _description_
+            Exception: Raised if no training data is provided, and no existing training data is available.
         """
         copied_dataframe = dataframe.copy()
         if copied_dataframe is None and self.train_df is None: raise Exception("Can't train when nothing is given.\n")
@@ -380,17 +411,18 @@ class Regression(Data):
         
     def get_metric(self, dataframes: Optional[list[pd.DataFrame] | pd.DataFrame] = None, *, 
                         hyperparam_dict: Optional[dict] = None) -> None:
-        """_summary_
+        """
+        Get metrics for the regression model using existing test data.
 
         Args:
-            dataframes (Optional[list[pd.DataFrame]  |  pd.DataFrame], optional): _description_. Defaults to None.
-            hyperparam_dict (Optional[dict], optional): _description_. Defaults to None.
+            dataframes (Optional[list[pd.DataFrame] | pd.DataFrame], optional): Test data. Defaults to None.
+            hyperparam_dict (Optional[dict], optional): Hyperparameters for prediction. Defaults to None.
 
         Raises:
-            Exception: _description_
+            Exception: Raised if no test data is provided, and no existing test data is available.
 
         Returns:
-            _type_: _description_
+            None
         """
         if dataframes is None and self.test_dfs == []: raise Exception("Can't test when nothing is given.\n")
         input_dfs = self.test_dfs if len(self.test_dfs) > 0 else dataframes
