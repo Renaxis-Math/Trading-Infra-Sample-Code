@@ -8,15 +8,16 @@ from datetime import datetime, timedelta
 
 # Generalized Methods
 def binary_search(sorted_items: list, target, elimination_func):
-    """_summary_
+    """
+    Used in filter_file_name to perform binary search on a sorted list to find the index of a target element.
 
     Args:
-        sorted_items (list): _description_
-        target (_type_): _description_
-        elimination_func (_type_): _description_
+        sorted_items (list): A sorted list of elements.
+        target (_type_): The target element to be found in the list.
+        elimination_func (_type_): A function that determines whether to eliminate elements during the search.
 
     Returns:
-        _type_: _description_
+        int: The index of the target element if found; otherwise, returns -1.
     """
     if sorted_items is None: return -1
     
@@ -31,15 +32,16 @@ def binary_search(sorted_items: list, target, elimination_func):
     return left_i
 
 def reverse_binary_search(sorted_items: list, target, elimination_func):
-    """_summary_
+    """
+    Perform binary search on a sorted list to find the index of a target element.
 
     Args:
-        sorted_items (list): _description_
-        target (_type_): _description_
-        elimination_func (_type_): _description_
+        sorted_items (list): A sorted list of elements.
+        target (_type_): The target element to be found in the list.
+        elimination_func (_type_): A function that determines whether to eliminate elements during the search.
 
     Returns:
-        _type_: _description_
+        int: The index of the target element if found; otherwise, returns -1.
     """
     if sorted_items is None: return -1
 
