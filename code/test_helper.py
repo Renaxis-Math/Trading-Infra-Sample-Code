@@ -54,7 +54,17 @@ def reverse_binary_search(sorted_items: list, target, elimination_func):
 # \Generalized Methods
 
 class Data:
-    def __init__(self, data_path: str):
+    # Data Constructor called with a string data path. 
+    # Stores a sorted list of filenames and datetimes
+    # Data constructor also has a train_df and list of test_dfs. 
+    def __init__(self, data_path: str): 
+        """
+        Args: 
+        data_path (str): The path for the data. 
+
+        Updates: 
+        Stores sorted list of filenames and datetimes. Stores train_df and list of test_dfs. 
+        """
         self.sorted_file_names = self._init_sorted_file_names(data_path)
         self.sorted_file_datetimes = self.__init__sorted_file_datetimes()
         self.train_df = None
@@ -109,11 +119,11 @@ class Data:
         """_summary_
 
         Args:
-            start_date (datetime | str): _description_
-            end_date (datetime | str): _description_
+            start_date (datetime | str): start date in yyyymmdd form or datetime object
+            end_date (datetime | str): end date in yyyymmdd form or datetime object 
 
         Returns:
-            list: _description_
+            list: Gets all the filenames between the start date and end date. 
         """
         if isinstance(start_date, str): start_date = datetime.strptime(start_date, r'%Y%m%d')
         if isinstance(end_date, str): end_date = datetime.strptime(end_date, r'%Y%m%d')
@@ -134,28 +144,36 @@ class Data:
     # \Helper Functions
     
     # APIs
-    def get_df_between_date(self, *,
+    def get_df_between_date(self, *, # * means that after this every argument must be specified with arg name
                             data_path: str,
                             start_date: datetime | str,
                             end_date: datetime | str) -> list[pd.DataFrame]:
-        """_summary_
-
+        """Filters the file names and gets a list of all data frames between the start and end dates
+        Args: 
+            data_path (str): Path for data
+            start_date (datetime | str): Start date for time interval
+            end_date (datetime | str): End date for time interval
         Returns:
-            _type_: _description_
+            list[pd.DataFrame]: list of data frames between all the dates.
         """
         filtered_file_names = self._filter_file_names(start_date = start_date, end_date = end_date)
-        dfs = [pd.read_csv(data_path + file_name) for file_name in filtered_file_names]
+        dfs = [pd.read_csv(data_path + file_name) for file_name in filtered_file_names] #list of data drames
         
-        self.test_dfs = [df for df in dfs]
+        self.test_dfs = [df for df in dfs] # store dfs as test data frames. 
         return dfs
     
     def update_and_get_train_df(self, data_path: str, test_start_yyyymmdd: str, *,
                                     movingBack_dayCount: int,
                                     years_count: int) -> pd.DataFrame:
-        """_summary_
+        """
+        Args: 
+            data_path (str): Path to all the data
+            test_start_yyyymmdd (str): Start of testing period
+            movingBack_dayCount (int): Time between end of training and start of testing (Typically 30 days)
+            years_count (int): Number of years used in training. 
 
         Returns:
-            _type_: _description_
+            _type_: One training DF. This is a combined data frame of all the training data for the training period. 
         """
         test_start_date = datetime.strptime(test_start_yyyymmdd, r'%Y%m%d')
         train_end_date = test_start_date - timedelta(days = movingBack_dayCount)
@@ -175,23 +193,23 @@ class Regression(Data):
                  regression_type: str = 'OLS', 
                  hyperparam_dict: Optional[dict] = None):
 
-        if data_path is not None: super().__init__(data_path)
+        if data_path is not None: super().__init__(data_path) # Data class is super class
         
-        # 
+        # Given a type of regression, returns the function to train. Defaults to OLS
         self.regressionName_func_map = {
             'OLS': self._sklearn_ols_regression,
             'LASSO': self._sklearn_LASSO_regression,
             'XGBOOST': self._xgboost_regression }
         #\  
 
-        #
+        # Build a regression object of appropriate type and give correct hyper params. 
         self.regression_type = regression_type
         if self.regression_type is None: print(f"{regression_input} does not exist. {self._list_all_regression_types}.\n")
         else: print(f"You're using: {self.regression_type}.\n")
         self.saved_model = self.regressionName_func_map[self.regression_type](hyperparam_dict)
         #\
         
-        #
+        # Initializing data members for predictions and interacting terms. 
         self.feature_col_names = []
         self.interacting_terms_list = []
         self.predicted_y_list = []
@@ -211,12 +229,13 @@ class Regression(Data):
         return
 
     # Scikit-learn Region
+    # All functions make a version of the regressor given the hyperparam dictionaries. 
     def _sklearn_ols_regression(self, hyperparam_dict: Optional[dict] = None):
         from sklearn.linear_model import LinearRegression
         
         returning_model = None
         if hyperparam_dict is None: returning_model = LinearRegression()
-        else: returning_model = LinearRegression(**hyperparam_dict)
+        else: returning_model = LinearRegression(**hyperparam_dict) # ** allows for using keyword args. 
         
         print(f"Available hyperparams: {vars(returning_model)}")
         return returning_model
@@ -250,13 +269,13 @@ class Regression(Data):
     def _get_df_with_interaction_terms(self, df: pd.DataFrame, 
                                        interacting_terms_list: list[list[str]],
                                        will_drop_single_interacting_term: bool = False) -> tuple[pd.DataFrame, list]:
-        """_summary_
+        """Gets a new dataframe with interacting terms added. 
 
         Args:
-            list (_type_): _description_
-
+            interacting_terms_list (list[list[str]]): List of two element terms that get multiplied. 
+            will_drop_single_interacting_term (bool): Whether to drop the original column or not. 
         Returns:
-            _type_: _description_
+            tuple[pd.DataFrame, list[str]]: [new dataframe with interacting terms, new df columns]
         """
         new_df = df.copy()
         new_col_names = []
@@ -278,19 +297,22 @@ class Regression(Data):
 
     def _predict(self, dataframes: list[pd.DataFrame] | pd.DataFrame, *, 
                  hyperparam_dict: Optional[dict] = None) -> list:
-        """_summary_
+        """
+        Predicts with either a list of dfs or one df for x values. 
+        Uses saved_model to predict
 
         Args:
             dataframes (list[pd.DataFrame] | pd.DataFrame): _description_
             hyperparam_dict (Optional[dict], optional): _description_. Defaults to None.
 
         Returns:
-            list: _description_
+            list: List of y value predictions given by the model. Does not save predictions. 
         """
         assert self.saved_model is not None, print("No model being trained yet!\n")
         predicted_y_list = []
 
-        #
+        # If there is a single data frame. Predict based on the single data frame given hyperparams
+        # Add to the prediced_y_list
         if isinstance(dataframes, pd.DataFrame):
             assert len(self.feature_col_names) == len(dataframes.columns)
             
@@ -300,7 +322,7 @@ class Regression(Data):
             predicted_y_list.append(predicted_y)
         #\
         
-        #
+        # Iterate over *all* the data frames. Add to predicted_y_list
         else:
             for i in range(len(dataframes)):
                 dataframe = dataframes[i]
@@ -315,7 +337,7 @@ class Regression(Data):
         return predicted_y_list
     # Helper Functions
     
-    # Metric Functions
+    # Metric Functions (defined by scott)
     def _get_response_corr(self, predicted_y, actual_y) -> float:
         return np.corrcoef(predicted_y, actual_y)[0, 1]
 
@@ -335,26 +357,34 @@ class Regression(Data):
                     feature_col_names: list[str] = [],
                     interacting_terms_list: list[list[str]] = [],
                     hyperparam_dict: Optional[dict] = None) -> None:
-        """_summary_
+        """
+        Trains the model.
+
+        Args:
+        dataframe (pd.Dataframe): Training Data frame. 
+        feature_col_names (list[str]): 
+        interacting_terms_list (list[list[str]]):
+        hyperparam_dict (Optional[dict]): 
 
         Raises:
-            Exception: _description_
+            Exception: Thrown where there is no self.train_df and no dataframe given. 
         """
         copied_dataframe = dataframe.copy()
         if copied_dataframe is None and self.train_df is None: raise Exception("Can't train when nothing is given.\n")
         
-        #
+        # Establish Training data is there there is no train_df in the regressor and update with interacting terms. 
         training_df = self.train_df if (self.train_df is not None) else copied_dataframe
         training_df, new_col_names = self._get_df_with_interaction_terms(training_df, interacting_terms_list)
         #\
 
-        #
+        # Get training y data and drop it from training data
         train_y = training_df[consts.RESPONSE_NAME]
         if consts.RESPONSE_NAME in set(training_df.columns):
             train_X = training_df.drop(consts.RESPONSE_NAME, axis=consts.COL, inplace=False)
         #\        
         
-        #
+        # Get a list of training features with interacting terms. 
+        # If there are none training features becomes the x_columns. 
         training_features = []
         training_features.extend(new_col_names)
         
@@ -363,12 +393,14 @@ class Regression(Data):
         train_X = training_df[training_features]
         #\
         
-        #
-        if hyperparam_dict is None: self.saved_model.fit(train_X, train_y)
-        else: self.saved_model.fit(train_X, train_y, **hyperparam_dict)
+        # Train the model using the train_x, train_y and hyperparams if necessary. 
+        if hyperparam_dict is None: 
+            self.saved_model.fit(train_X, train_y)
+        else: 
+            self.saved_model.fit(train_X, train_y) #does not take hyperparam dict
         #\
         
-        #
+        # Save feature column names and training features. 
         self.interacting_terms_list = interacting_terms_list
         self.feature_col_names = training_features
         #\
@@ -377,18 +409,18 @@ class Regression(Data):
         return
         
     def get_metric(self, dataframes: Optional[list[pd.DataFrame] | pd.DataFrame] = None, *, 
-                        hyperparam_dict: Optional[dict] = None) -> None:
-        """_summary_
+                        hyperparam_dict: Optional[dict] = None, printMetrics = True) -> (float, float, float):
+        """Get Scotts Metrics and print them out. 
 
         Args:
-            dataframes (Optional[list[pd.DataFrame]  |  pd.DataFrame], optional): _description_. Defaults to None.
+            dataframes (Optional[list[pd.DataFrame]  |  pd.DataFrame], optional):Test df or list of test dfs. Defaults to None.
             hyperparam_dict (Optional[dict], optional): _description_. Defaults to None.
 
         Raises:
-            Exception: _description_
+            Exception: When there is no dataframe given or test_dfs saved. 
 
         Returns:
-            _type_: _description_
+            None
         """
         if dataframes is None and self.test_dfs == []: raise Exception("Can't test when nothing is given.\n")
         input_dfs = self.test_dfs if len(self.test_dfs) > 0 else dataframes
@@ -407,7 +439,7 @@ class Regression(Data):
             test_X = _get_test_X(dataframes.copy())
             
             self.actual_y_list = [test_y]
-            self.predicted_y_list = self._predict(testing_df, hyperparam_dict = hyperparam_dict)
+            self.predicted_y_list = self._predict(test_X, hyperparam_dict = hyperparam_dict)
         else:
             input_dfs = [dataframe.copy() for dataframe in dataframes]
             actual_y_list = [input_df[consts.RESPONSE_NAME] for input_df in input_dfs]
@@ -421,19 +453,58 @@ class Regression(Data):
         assert len(self.predicted_y_list) == len(self.actual_y_list), \
         print(f"len(predicted_y_list) != len(actual_y_list)\n")
         
-        #
+        # Link the actual and predicted y_s together and call the metric functions
+        # Call for all dfs and average them. Use the * operator to unpack tuple. 
         predict_actual_pairs = list(zip(self.predicted_y_list, self.actual_y_list))
-        response_corr = np.mean([self._get_response_corr(*predict_actual_pair)
+        response_corr = np.mean([self._get_response_corr(*predict_actual_pair) # * operator unpacks the tuple into 2 args
                                  for predict_actual_pair in predict_actual_pairs])
         mean_return = np.mean([self._get_mean_return(*predict_actual_pair)
                                for predict_actual_pair in predict_actual_pairs])
         scale_factor = np.mean([self._get_scale_factor(*predict_actual_pair)
                                 for predict_actual_pair in predict_actual_pairs])
         #\
-
-        print(f"response_corr = {response_corr}")
-        print(f"mean_return = {mean_return}")
-        print(f"scale factor = {scale_factor}")
+        if printMetrics:
+            print(f"response_corr = {response_corr}")
+            print(f"mean_return = {mean_return}")
+            print(f"scale factor = {scale_factor}")
         
-        return
+        return response_corr, mean_return, scale_factor
     # \APIs
+
+    # Experiment Functions: 
+    # TODO: Do something with the betas, toggle output. 
+def lasso_exp(data_path, *,
+                train_df: pd.DataFrame, 
+                test_dfs: [pd.DataFrame],  
+                feature_col_names: list[str] = [],
+                interacting_terms_list: list[list[str]] = [],
+                hyperparam_dict: Optional[dict] = None, 
+                num_trials:int = 30) -> None:
+    response_corrs, mean_returns,scale_factors = [],[], []
+    print(f"Conducting {num_trials} trials on a Lasso model with hyperparams:\n{hyperparam_dict}")
+    #Use trial number for seed
+    if hyperparam_dict == None: 
+        hyperparam_dict = {'random_state': 0}
+    elif 'random_state' not in hyperparam_dict:
+            hyperparam_dict['random_state'] = 0
+    for trial in range(num_trials):
+        lasso_model = Regression(regression_type='Lasso', data_path=data_path)
+        hyperparam_dict['random_state'] = trial
+        lasso_model.train(train_df, 
+                            interacting_terms_list= interacting_terms_list,
+                        feature_col_names= feature_col_names,
+                        hyperparam_dict=hyperparam_dict,
+                            )
+        rc,mr,sf = lasso_model.get_metric(dataframes=test_dfs, printMetrics=False)
+        response_corrs.append(rc)
+        mean_returns.append(mr)
+        scale_factors.append(sf)
+
+    # Print Average Metrics
+    print(f"Average Metrics across {num_trials}:")
+    print(f"response_corr = {np.average(response_corrs)}")
+    print(f"mean_return = {np.average(mean_returns)}")
+    print(f"scale factor = {np.average(scale_factors)}")
+    return
+        
+            
