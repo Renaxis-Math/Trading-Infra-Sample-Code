@@ -69,7 +69,7 @@ class TestSuite():
     def test_get_file_names(self):
         start_date1 = "20190304"
         end_date1 = "20190314"
-        output_files1 = helper.get_file_names(start_date1, end_date1, consts.PATH_MAP["RYAN"])
+        output_files1 = helper.get_file_names(start_date1, end_date1, consts.PATH_MAP["HOANG"])
         assert len(output_files1) == 8
         assert "data.20190304_1200" in output_files1
         assert "data.20190314_1200" not in output_files1
