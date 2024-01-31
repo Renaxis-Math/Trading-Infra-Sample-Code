@@ -199,17 +199,18 @@ class Regression(Data):
 
         if data_path is not None: super().__init__(data_path)
         
-        # 
+        # Mapping for regression_type
         self.regressionName_func_map = {
             'OLS': self._sklearn_ols_regression,
             'LASSO': self._sklearn_LASSO_regression,
             'XGBOOST': self._xgboost_regression }
         #\  
 
-        #
+        # Go into the map and grab the regression type
         self.regression_type = regression_type
-        if self.regression_type is None: print(f"{regression_input} does not exist. {self._list_all_regression_types}.\n")
+        if self.regression_type is None: print(f"{regression_type} does not exist. {self._list_all_regression_types}.\n")
         else: print(f"You're using: {self.regression_type}.\n")
+        # Pass in the hyper parameters
         self.saved_model = self.regressionName_func_map[self.regression_type](hyperparam_dict)
         #\
         
@@ -219,10 +220,12 @@ class Regression(Data):
         self.predicted_y_list = []
         self.actual_y_list = []
         #\
-        
+    
+    # @property allows you to access a method like an attribute like obj.x
     @property
     def regression_type(self) -> str:
         return self._regression_type
+    # This allows for examnple obj.x = y
     @regression_type.setter
     def regression_type(self, regression_input: str) -> None:
         if regression_input in self.regressionName_func_map: self._regression_type = regression_input
@@ -238,6 +241,7 @@ class Regression(Data):
         
         returning_model = None
         if hyperparam_dict is None: returning_model = LinearRegression()
+        # ** unpacks the contents of the dictionary as passes them as key words
         else: returning_model = LinearRegression(**hyperparam_dict)
         
         print(f"Available hyperparams: {vars(returning_model)}")
@@ -287,13 +291,15 @@ class Regression(Data):
         new_col_names = []
         
         for interacting_terms in interacting_terms_list:
+            # Checks to see if all the terms exist within the DataFrame
             all_terms_exist = np.all(np.isin(np.ravel(interacting_terms), df.columns))
             
             if all_terms_exist:
                 new_col_name = str(tuple(interacting_terms))
                 new_col_names.append(new_col_name)
-                
+                # Create the term by computing the product
                 new_df[new_col_name] = np.prod(new_df[interacting_terms], axis=consts.COL)
+                #drop the individual columns if specificed
                 if will_drop_single_interacting_term: new_df.drop(interacting_terms, axis = consts.COL, inplace=True)
             else:
                 print(f"{interacting_terms} missing!")
@@ -316,17 +322,18 @@ class Regression(Data):
         assert self.saved_model is not None, print("No model being trained yet!\n")
         predicted_y_list = []
 
-        #
+        # Checks to see if it is only one df
         if isinstance(dataframes, pd.DataFrame):
+            # ensure that the feature columns matches the trained models'
             assert len(self.feature_col_names) == len(dataframes.columns)
             
             if hyperparam_dict is None: predicted_y = self.saved_model.predict(dataframes)
             else: predicted_y = self.saved_model.predict(dataframes, **hyperparam_dict)
-            
+            # append the predicted values to the predicted list
             predicted_y_list.append(predicted_y)
         #\
         
-        #
+        # loop through all of the dataframes and do the same thing
         else:
             for i in range(len(dataframes)):
                 dataframe = dataframes[i]
@@ -376,32 +383,35 @@ class Regression(Data):
         copied_dataframe = dataframe.copy()
         if copied_dataframe is None and self.train_df is None: raise Exception("Can't train when nothing is given.\n")
         
-        #
+        # if there is training_df use that else use the given?? I think should be opposite 
         training_df = self.train_df if (self.train_df is not None) else copied_dataframe
+        # Generate interacting terms
         training_df, new_col_names = self._get_df_with_interaction_terms(training_df, interacting_terms_list)
         #\
 
-        #
+        # Extract response and remove it from the feature set
         train_y = training_df[consts.RESPONSE_NAME]
         if consts.RESPONSE_NAME in set(training_df.columns):
             train_X = training_df.drop(consts.RESPONSE_NAME, axis=consts.COL, inplace=False)
         #\        
         
-        #
+        # add the new interacting terms to the training_features
         training_features = []
         training_features.extend(new_col_names)
         
+        # extended the features with the specificed or use all
         if len(feature_col_names) > 0: training_features.extend(feature_col_names)
         else: training_features.extend(train_X.columns)
+        # Extract features for training
         train_X = training_df[training_features]
         #\
         
-        #
+        # train with the or without the hyperparameters
         if hyperparam_dict is None: self.saved_model.fit(train_X, train_y)
         else: self.saved_model.fit(train_X, train_y, **hyperparam_dict)
         #\
         
-        #
+        # update the model with the latest information
         self.interacting_terms_list = interacting_terms_list
         self.feature_col_names = training_features
         #\
@@ -441,7 +451,8 @@ class Regression(Data):
             test_X = _get_test_X(dataframes.copy())
             
             self.actual_y_list = [test_y]
-            self.predicted_y_list = self._predict(testing_df, hyperparam_dict = hyperparam_dict)
+            # I think???
+            self.predicted_y_list = self._predict(test_X, hyperparam_dict = hyperparam_dict)
         else:
             input_dfs = [dataframe.copy() for dataframe in dataframes]
             actual_y_list = [input_df[consts.RESPONSE_NAME] for input_df in input_dfs]

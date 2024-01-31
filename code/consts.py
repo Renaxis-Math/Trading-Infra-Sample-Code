@@ -7,7 +7,7 @@ ROW = 0
 COL = 1
 RAW_DATA_PATH = "" #TODO: Need discussion
 DATA_PATH_2015 = "../data/"
-CLEANED_DATA_PATH = "../data/cleaned_data/training_data.csv"
+CLEANED_DATA_PATH = "/Users/tommylu/Downloads/data/cleaned_data/training_data.csv"
 #TESTING_DATA_PATH = "../data/test_data" Idea for test data
 
 RESPONSE_NAME = "tonight"
@@ -30,7 +30,7 @@ RAW_DATA_PATH_HENRY = "../data/hmc/"
 # \HENRY
 
 # TOMMY
-RAW_DATA_PATH_TOMMY = ""
+RAW_DATA_PATH_TOMMY = "/Users/tommylu/Downloads/data/"
 # \TOMMY
 
 PATH_MAP = {"RYAN":RAW_DATA_PATH_RYAN,
