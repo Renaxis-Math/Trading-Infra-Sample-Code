@@ -22,7 +22,7 @@ RAW_DATA_PATH_HOANG = "../data/test_data/"
 # \HOANG
 
 # ROSY
-RAW_DATA_PATH_ROSY= ""
+RAW_DATA_PATH_ROSY= "/Users/rosy/Clinic/Clinic/data/hmc/"
 # \ROSY
 
 # HENRY
