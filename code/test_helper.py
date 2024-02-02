@@ -56,6 +56,11 @@ def reverse_binary_search(sorted_items: list, target, elimination_func):
 # \Generalized Methods
 
 class Data:
+    """
+    Variables:
+        sorted_file_names: a sorted list of all file names from the data path 
+        sorted_file_datetimes: a sorted list of datetimes from the filenames
+    """
     def __init__(self, data_path: str):
         self.sorted_file_names = self._init_sorted_file_names(data_path)
         self.sorted_file_datetimes = self.__init__sorted_file_datetimes()
@@ -164,7 +169,9 @@ class Data:
         self.test_dfs = [df for df in dfs]
         return dfs
     
-    def update_and_get_train_df(self, data_path: str, test_start_yyyymmdd: str, *,
+    def update_and_get_train_df(self, data_path: str, test_start_yyyymmdd: str, *, 
+                                # * is here to indict the start of key-word only arguments,
+                                # Keyword-only arguments are parameters that must be passed using their names and cannot be specified positionally
                                     movingBack_dayCount: int,
                                     years_count: int) -> pd.DataFrame:
         """
@@ -206,9 +213,9 @@ class Regression(Data):
             'XGBOOST': self._xgboost_regression }
         #\  
 
-        #
+        # if the regression_type is valid, call the regression function with the hyperparam_dict which return a model
         self.regression_type = regression_type
-        if self.regression_type is None: print(f"{regression_input} does not exist. {self._list_all_regression_types}.\n")
+        if self.regression_type is None: print(f"{regression_type} does not exist. {self._list_all_regression_types}.\n")
         else: print(f"You're using: {self.regression_type}.\n")
         self.saved_model = self.regressionName_func_map[self.regression_type](hyperparam_dict)
         #\
@@ -219,7 +226,8 @@ class Regression(Data):
         self.predicted_y_list = []
         self.actual_y_list = []
         #\
-        
+    
+    # functions for input check 
     @property
     def regression_type(self) -> str:
         return self._regression_type
@@ -316,7 +324,7 @@ class Regression(Data):
         assert self.saved_model is not None, print("No model being trained yet!\n")
         predicted_y_list = []
 
-        #
+        # if dataframe is just have one single dataframe 
         if isinstance(dataframes, pd.DataFrame):
             assert len(self.feature_col_names) == len(dataframes.columns)
             
@@ -326,7 +334,7 @@ class Regression(Data):
             predicted_y_list.append(predicted_y)
         #\
         
-        #
+        # else dataframe is a list of dataframes
         else:
             for i in range(len(dataframes)):
                 dataframe = dataframes[i]
@@ -376,18 +384,19 @@ class Regression(Data):
         copied_dataframe = dataframe.copy()
         if copied_dataframe is None and self.train_df is None: raise Exception("Can't train when nothing is given.\n")
         
-        #
+        # getting the training df (either from class variable or the input of this method)
         training_df = self.train_df if (self.train_df is not None) else copied_dataframe
         training_df, new_col_names = self._get_df_with_interaction_terms(training_df, interacting_terms_list)
         #\
 
-        #
+        # getting the response variables and drop it from the training df
         train_y = training_df[consts.RESPONSE_NAME]
         if consts.RESPONSE_NAME in set(training_df.columns):
             train_X = training_df.drop(consts.RESPONSE_NAME, axis=consts.COL, inplace=False)
         #\        
         
-        #
+        # first, add the interacting term columns. Then, if this method is called with a feature_col_names then used them 
+        # as additional training_features, else just use all columns as training features 
         training_features = []
         training_features.extend(new_col_names)
         
@@ -396,12 +405,12 @@ class Regression(Data):
         train_X = training_df[training_features]
         #\
         
-        #
+        # if no hyperparam is used, then fit the model with out hyperparameter 
         if hyperparam_dict is None: self.saved_model.fit(train_X, train_y)
         else: self.saved_model.fit(train_X, train_y, **hyperparam_dict)
         #\
         
-        #
+        # update self.feature_col_names class variables after we get all the training features after line 404
         self.interacting_terms_list = interacting_terms_list
         self.feature_col_names = training_features
         #\
@@ -455,9 +464,10 @@ class Regression(Data):
         assert len(self.predicted_y_list) == len(self.actual_y_list), \
         print(f"len(predicted_y_list) != len(actual_y_list)\n")
         
-        #
+        # pair the prediced_y and actual_y from each df together 
+        # for each pair, we get their 3 metrics and take the average of all
         predict_actual_pairs = list(zip(self.predicted_y_list, self.actual_y_list))
-        response_corr = np.mean([self._get_response_corr(*predict_actual_pair)
+        response_corr = np.mean([self._get_response_corr(*predict_actual_pair) # * used here to break the pair apart to pattern match (?) predicted_y and actual_y?
                                  for predict_actual_pair in predict_actual_pairs])
         mean_return = np.mean([self._get_mean_return(*predict_actual_pair)
                                for predict_actual_pair in predict_actual_pairs])
