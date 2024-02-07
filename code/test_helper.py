@@ -248,7 +248,7 @@ class Regression(Data):
         if hyperparam_dict is None: returning_model = LinearRegression()
         else: returning_model = LinearRegression(**hyperparam_dict)
         
-        print(f"Available hyperparams: {vars(returning_model)}")
+        # print(f"Available hyperparams: {vars(returning_model)}")
         return returning_model
 
     def _sklearn_LASSO_regression(self, hyperparam_dict: Optional[dict] = None):
@@ -258,7 +258,7 @@ class Regression(Data):
         if hyperparam_dict is None: returning_model = LassoCV()
         else: returning_model = LassoCV(**hyperparam_dict)
         
-        print(f"Available hyperparams: {vars(returning_model)}")
+        # print(f"Available hyperparams: {vars(returning_model)}")
         return returning_model
 
     def _xgboost_regression(self, hyperparam_dict: Optional[dict] = None):
@@ -268,7 +268,7 @@ class Regression(Data):
         if hyperparam_dict is None: returning_model = XGBRegressor()
         else: returning_model = XGBRegressor(**hyperparam_dict)
         
-        print(f"Available hyperparams: {vars(returning_model)}")
+        # print(f"Available hyperparams: {vars(returning_model)}")
         return returning_model
     # \Scikit-learn Region
     
@@ -368,7 +368,8 @@ class Regression(Data):
     def train(self, dataframe: Optional[pd.DataFrame] = None, *,
                     feature_col_names: list[str] = [],
                     interacting_terms_list: list[list[str]] = [],
-                    hyperparam_dict: Optional[dict] = None) -> None:
+                    hyperparam_dict: Optional[dict] = None,
+                    printFeatures = True) -> None:
         """
         Train the regression model.
 
@@ -414,12 +415,13 @@ class Regression(Data):
         self.interacting_terms_list = interacting_terms_list
         self.feature_col_names = training_features
         #\
-        
-        print(f"Features being used: {self.feature_col_names}")
+        if printFeatures:
+            print(f"Features being used: {self.feature_col_names}")
         return
         
     def get_metric(self, dataframes: Optional[list[pd.DataFrame] | pd.DataFrame] = None, *, 
-                        hyperparam_dict: Optional[dict] = None) -> None:
+                        hyperparam_dict: Optional[dict] = None,
+                        printMetrics:bool = True) -> None:
         """
         Get metrics for the regression model using existing test data.
 
@@ -474,10 +476,84 @@ class Regression(Data):
         scale_factor = np.mean([self._get_scale_factor(*predict_actual_pair)
                                 for predict_actual_pair in predict_actual_pairs])
         #\
-
-        print(f"response_corr = {response_corr}")
-        print(f"mean_return = {mean_return}")
-        print(f"scale factor = {scale_factor}")
+        if printMetrics:
+            print(f"response_corr = {response_corr}")
+            print(f"mean_return = {mean_return}")
+            print(f"scale factor = {scale_factor}")
         
-        return
+        return response_corr, mean_return, scale_factor
     # \APIs
+
+def experiment(experiment_type:str, 
+        data_path:str, *, 
+              train_df: pd.DataFrame,
+              test_dfs: Optional[list[pd.DataFrame] | pd.DataFrame],
+              features: list[str],
+              interacting_terms: list[str],
+              training_hyperparams: Optional[dict],
+              model_hyperparams: Optional[dict]):
+    """ Wrapper function to do an experiment with lasso or XGBoost. 
+    Args: 
+    experiment_type: (str) Lasso or XGBoost
+    data_path: Path to raw data. 
+    train_df: (pd.DataFrame) Training dataframe
+    test_dfs: (Optional[list[pd.DataFrame] | pd.DataFrame]) test dataframe or dataframes
+    features: list[str]: Features to train on
+    interacting_terms:  interacting terms 
+    training_hyperparams: Hyperparameters to use in .fit (sample weights)
+    model_hyperparams: Hyperparams for the model generally. 
+
+    Returns a tuple of Scott's metrics
+    """
+    model = Regression(regression_type=experiment_type, data_path=data_path, hyperparam_dict=model_hyperparams )
+    model.train(train_df, feature_col_names = features, interacting_terms_list = interacting_terms, hyperparam_dict=training_hyperparams, printFeatures=False)
+    metrics = model.get_metric(dataframes = test_dfs, printMetrics=False)
+    return metrics
+
+
+def iterate_hyperparam(experiment_type:str,*, #lasso or xgboost
+                      hyperparam_name:str,
+                      hyperparam_values: list,
+                      data_path: str, 
+                      train_df: pd.DataFrame,
+                      test_dfs: Optional[list[pd.DataFrame] | pd.DataFrame],
+                      features: str,
+                      interacting_terms: list[str],
+                      training_hyperparams: Optional[dict] = None,
+                      model_hyperparams: Optional[dict] = None):
+    """"
+    Iterates over a single hyperparameter while leaving the rest constant. 
+
+    Args: 
+    experiment_type: (str) Lasso or XGBoost
+    data_path: Path to raw data. 
+    train_df: (pd.DataFrame) Training dataframe
+    test_dfs: (Optional[list[pd.DataFrame] | pd.DataFrame]) test dataframe or dataframes
+    features: list[str]: Features to train on
+    interacting_terms:  interacting terms 
+    training_hyperparams: Hyperparameters to use in .fit (sample weights)
+    model_hyperparams: Hyperparams for the model generally. 
+
+    Returns a tuple of dictionarys of metrics. 
+    """
+    weighted_corrs, mean_returns, scale_factors = {}, {}, {}
+    if model_hyperparams == None: 
+        model_hyperparams = {hyperparam_name:0}
+    if hyperparam_name not in model_hyperparams:
+        model_hyperparams[hyperparam_name] = 0 # placeholder
+    for exp_hyp_param in hyperparam_values:
+        model_hyperparams[hyperparam_name] = exp_hyp_param
+        wc,mr,sf = experiment(experiment_type, data_path,
+                        train_df=train_df,
+                        test_dfs=test_dfs,
+                        features=features,
+                        interacting_terms=interacting_terms,
+                        training_hyperparams=training_hyperparams,
+                        model_hyperparams=model_hyperparams)
+        # map 
+        weighted_corrs[exp_hyp_param] = wc
+        mean_returns[exp_hyp_param] = mr
+        scale_factors[exp_hyp_param] = sf
+    
+    return weighted_corrs, mean_returns, scale_factors
+    

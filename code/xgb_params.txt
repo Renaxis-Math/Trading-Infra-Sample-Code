@@ -1,0 +1,35 @@
+n_estimators (Optional[int]) – Number of gradient boosted trees. Equivalent to number of boosting rounds.
+max_depth (Optional[int]) – Maximum tree depth for base learners.
+max_leaves – Maximum number of leaves; 0 indicates no limit.
+max_bin – If using histogram-based algorithm, maximum number of bins per feature
+grow_policy – Tree growing policy. 0: favor splitting at nodes closest to the node, i.e. grow depth-wise. 1: favor splitting at nodes with highest loss change.
+learning_rate (Optional[float]) – Boosting learning rate (xgb’s “eta”)
+verbosity (Optional[int]) – The degree of verbosity. Valid values are 0 (silent) - 3 (debug).
+objective (Union[str, Callable[[numpy.ndarray, numpy.ndarray], Tuple[numpy.ndarray, numpy.ndarray]], NoneType]) – Specify the learning task and the corresponding learning objective or a custom objective function to be used (see note below).
+booster (Optional[str]) – Specify which booster to use: gbtree, gblinear or dart.
+tree_method (Optional[str]) – Specify which tree method to use. Default to auto. If this parameter is set to default, XGBoost will choose the most conservative option available. It’s recommended to study this option from the parameters document tree method
+n_jobs (Optional[int]) – Number of parallel threads used to run xgboost. When used with other Scikit-Learn algorithms like grid search, you may choose which algorithm to parallelize and balance the threads. Creating thread contention will significantly slow down both algorithms.
+gamma (Optional[float]) – (min_split_loss) Minimum loss reduction required to make a further partition on a leaf node of the tree.
+min_child_weight (Optional[float]) – Minimum sum of instance weight(hessian) needed in a child.
+max_delta_step (Optional[float]) – Maximum delta step we allow each tree’s weight estimation to be.
+subsample (Optional[float]) – Subsample ratio of the training instance.
+sampling_method –
+    Sampling method. Used only by the GPU version of hist tree method.
+    uniform: select random training instances uniformly.
+    gradient_based select random training instances with higher probability when the gradient and hessian are larger. (cf. CatBoost)
+colsample_bytree (Optional[float]) – Subsample ratio of columns when constructing each tree.
+colsample_bylevel (Optional[float]) – Subsample ratio of columns for each level.
+colsample_bynode (Optional[float]) – Subsample ratio of columns for each split.
+reg_alpha (Optional[float]) – L1 regularization term on weights (xgb’s alpha).
+reg_lambda (Optional[float]) – L2 regularization term on weights (xgb’s lambda).
+scale_pos_weight (Optional[float]) – Balancing of positive and negative weights.
+base_score (Optional[float]) – The initial prediction score of all instances, global bias.
+random_state (Optional[Union[numpy.random.RandomState, int]]) – Random number seed.
+missing (float, default np.nan) – Value in the data which needs to be present as a missing value.
+num_parallel_tree (Optional[int]) – Used for boosting random forest.
+monotone_constraints (Optional[Union[Dict[str, int], str]]) – Constraint of variable monotonicity. See tutorial for more information.
+interaction_constraints (Optional[Union[str, List[Tuple[str]]]]) – Constraints for interaction representing permitted interactions. The constraints must be specified in the form of a nested list, e.g. [[0, 1], [2, 3, 4]], where each inner list is a group of indices of features that are allowed to interact with each other. See tutorial for more information
+importance_type (Optional[str]) –
+    The feature importance type for the feature_importances_ property:
+    For tree model, it’s either “gain”, “weight”, “cover”, “total_gain” or “total_cover”.
+    For linear model, only “weight” is defined and it’s the normalized coefficients without bias.
