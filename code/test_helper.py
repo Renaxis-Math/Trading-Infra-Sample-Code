@@ -146,7 +146,7 @@ class Data:
     # \Helper Functions
     
     # APIs
-    def get_df_between_date(self, *,
+    def get_df_between_date(self, *, # * means that after this every argument must be specified with arg name
                             data_path: str,
                             start_date: datetime | str,
                             end_date: datetime | str) -> list[pd.DataFrame]:
@@ -164,9 +164,9 @@ class Data:
             list[pd.DataFrame]: A list of DataFrames read from files within the specified date range.
         """
         filtered_file_names = self._filter_file_names(start_date = start_date, end_date = end_date)
-        dfs = [pd.read_csv(data_path + file_name) for file_name in filtered_file_names]
+        dfs = [pd.read_csv(data_path + file_name) for file_name in filtered_file_names] #list of data drames
         
-        self.test_dfs = [df for df in dfs]
+        self.test_dfs = [df for df in dfs] # store dfs as test data frames. 
         return dfs
     
     def update_and_get_train_df(self, data_path: str, test_start_yyyymmdd: str, *, 
@@ -204,15 +204,16 @@ class Regression(Data):
                  regression_type: str = 'OLS', 
                  hyperparam_dict: Optional[dict] = None):
 
-        if data_path is not None: super().__init__(data_path)
+        if data_path is not None: super().__init__(data_path) # Data class is super class
         
-        # 
+        # Given a type of regression, returns the function to train. Defaults to OLS
         self.regressionName_func_map = {
             'OLS': self._sklearn_ols_regression,
             'LASSO': self._sklearn_LASSO_regression,
             'XGBOOST': self._xgboost_regression }
         #\  
 
+        # Build a regression object of appropriate type and give correct hyper params. 
         # if the regression_type is valid, call the regression function with the hyperparam_dict which return a model
         self.regression_type = regression_type
         if self.regression_type is None: print(f"{regression_type} does not exist. {self._list_all_regression_types}.\n")
@@ -220,7 +221,7 @@ class Regression(Data):
         self.saved_model = self.regressionName_func_map[self.regression_type](hyperparam_dict)
         #\
         
-        #
+        # Initializing data members for predictions and interacting terms. 
         self.feature_col_names = []
         self.interacting_terms_list = []
         self.predicted_y_list = []
@@ -241,12 +242,13 @@ class Regression(Data):
         return
 
     # Scikit-learn Region
+    # All functions make a version of the regressor given the hyperparam dictionaries. 
     def _sklearn_ols_regression(self, hyperparam_dict: Optional[dict] = None):
         from sklearn.linear_model import LinearRegression
         
         returning_model = None
         if hyperparam_dict is None: returning_model = LinearRegression()
-        else: returning_model = LinearRegression(**hyperparam_dict)
+        else: returning_model = LinearRegression(**hyperparam_dict) # ** allows for using keyword args. 
         
         # print(f"Available hyperparams: {vars(returning_model)}")
         return returning_model
@@ -312,6 +314,9 @@ class Regression(Data):
     def _predict(self, dataframes: list[pd.DataFrame] | pd.DataFrame, *, 
                  hyperparam_dict: Optional[dict] = None) -> list:
         """
+        Predicts with either a list of dfs or one df for x values. 
+        Uses saved_model to predict
+        
         Predict stock prices using the trained model.
 
         Args:
@@ -319,11 +324,14 @@ class Regression(Data):
             hyperparam_dict (Optional[dict], optional): Hyperparameters for the regression model. Defaults to None.
 
         Returns:
+            list: List of y value predictions given by the model. Does not save predictions. 
             list: List of predicted stock price values.
         """
         assert self.saved_model is not None, print("No model being trained yet!\n")
         predicted_y_list = []
 
+        # If there is a single data frame. Predict based on the single data frame given hyperparams
+        # Add to the prediced_y_list
         # if dataframe is just have one single dataframe 
         if isinstance(dataframes, pd.DataFrame):
             assert len(self.feature_col_names) == len(dataframes.columns)
@@ -349,7 +357,7 @@ class Regression(Data):
         return predicted_y_list
     # Helper Functions
     
-    # Metric Functions
+    # Metric Functions (defined by scott)
     def _get_response_corr(self, predicted_y, actual_y) -> float:
         return np.corrcoef(predicted_y, actual_y)[0, 1]
 
@@ -434,6 +442,7 @@ class Regression(Data):
 
         Returns:
             None
+            None
         """
         if dataframes is None and self.test_dfs == []: raise Exception("Can't test when nothing is given.\n")
         input_dfs = self.test_dfs if len(self.test_dfs) > 0 else dataframes
@@ -452,7 +461,7 @@ class Regression(Data):
             test_X = _get_test_X(dataframes.copy())
             
             self.actual_y_list = [test_y]
-            self.predicted_y_list = self._predict(testing_df, hyperparam_dict = hyperparam_dict)
+            self.predicted_y_list = self._predict(test_X, hyperparam_dict = hyperparam_dict)
         else:
             input_dfs = [dataframe.copy() for dataframe in dataframes]
             actual_y_list = [input_df[consts.RESPONSE_NAME] for input_df in input_dfs]
@@ -480,7 +489,12 @@ class Regression(Data):
             print(f"response_corr = {response_corr}")
             print(f"mean_return = {mean_return}")
             print(f"scale factor = {scale_factor}")
+        if printMetrics:
+            print(f"response_corr = {response_corr}")
+            print(f"mean_return = {mean_return}")
+            print(f"scale factor = {scale_factor}")
         
+        return response_corr, mean_return, scale_factor
         return response_corr, mean_return, scale_factor
     # \APIs
 
