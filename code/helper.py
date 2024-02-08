@@ -1,508 +1,480 @@
-# This file contains all helper functions
-# to be used in all files in the project.
 import pandas as pd
 import numpy as np
-import importlib
-import re
 import consts
-import os
+import importlib
+import os, re, typing
+from typing import Optional
+from datetime import datetime, timedelta
 
-importlib.reload(consts)
+# Generalized Methods
+def binary_search(sorted_items: list, target, elimination_func):
+    """
+    Used in filter_file_name to perform binary search on a sorted list to find the index of a target element.
 
-class Regression():
-    def __init__(self, regression_type = 'OLS'):
-        #TODO: Whenever you customize this, remember to add your method here!!!
-        """
-        Always follow this same format if you use default sklearn's model:
-        f(train_X, train_y, sample_weight = None, allow_internal_update = True)
-        """
-        self.availableRegressionName_func_map = {
-            'OLS': self.sklearn_ols_regression,
-            'LASSO': self.sklearn_LASSO_regression,
-            'XGBOOST': self.xgboost_regression
-        }
-        
-        self.betas = None # betas[-1] = intercept
-        self.predicted_responses = None
-        self.actual_responses = None
-        self.model = None
-        
-        if regression_type in self.availableRegressionName_func_map:
-            self.regression_type = regression_type
-        elif regression_type.lower() in self.availableRegressionName_func_map:
-            self.regression_type = regression_type.lower()
-        elif regression_type.upper() in self.availableRegressionName_func_map:
-            self.regression_type = regression_type.upper()
-        elif regression_type.capitalize() in self.availableRegressionName_func_map:
-            self.regression_type = regression_type.capitalize()
-        else:
-            print(f"{regression_type} does not exist.")
-            
-    def __repr__(self) -> str:
-        return f"{self.regression_type} Regression Model"
+    Args:
+        sorted_items (list): A sorted list of elements.
+        target (_type_): The target element to be found in the list.
+        elimination_func (_type_): A function that determines whether to eliminate elements during the search.
+
+    Returns:
+        int: The index of the target element if found; otherwise, returns -1.
+    """
+    if sorted_items is None: return -1
     
-    @staticmethod
-    def list_all_regression_types():
-        available_regressions = Regression().availableRegressionName_func_map.keys()
-        for i, regression_type in enumerate(available_regressions):
-            print(f"{i+1}: {regression_type}")
+    left_i ,right_i = 0, len(sorted_items) - 1 
+    
+    while left_i < right_i:
+        mid_i = left_i + (right_i - left_i) // 2
+
+        if elimination_func(sorted_items[mid_i], target): left_i = mid_i + 1
+        else: right_i = mid_i
         
-    ### Sklearn
-    def sklearn_ols_regression(self, train_X, train_y, sample_weight = None, allow_internal_update = True):
+    return left_i
+
+def reverse_binary_search(sorted_items: list, target, elimination_func):
+    """
+    Perform binary search on a sorted list to find the index of a target element.
+
+    Args:
+        sorted_items (list): A sorted list of elements.
+        target (_type_): The target element to be found in the list.
+        elimination_func (_type_): A function that determines whether to eliminate elements during the search.
+
+    Returns:
+        int: The index of the target element if found; otherwise, returns -1.
+    """
+    if sorted_items is None: return -1
+
+    left_i ,right_i = 0, len(sorted_items) - 1  
+    
+    while left_i < right_i:
+        mid_i = left_i + (right_i - left_i) // 2 + 1
+        if elimination_func(sorted_items[mid_i], target): right_i = mid_i - 1 
+        else: left_i = mid_i
+        
+    return right_i
+# \Generalized Methods
+
+class Data:
+    """
+    Variables:
+        sorted_file_names: a sorted list of all file names from the data path 
+        sorted_file_datetimes: a sorted list of datetimes from the filenames
+    """
+    def __init__(self, data_path: str):
+        self.sorted_file_names = self._init_sorted_file_names(data_path)
+        self.sorted_file_datetimes = self.__init__sorted_file_datetimes()
+        self.train_df = None
+        self.test_dfs = []
+        return
+    
+    def _init_sorted_file_names(self, data_path: Optional[str]) -> list[str]:
+        import os
+        if data_path is None: return
+
+        try:
+            file_names = os.listdir(data_path)
+            data_file_names = list(filter(lambda file_name: consts.DATA_FILTER_KEYWORD in file_name, file_names))
+            data_file_names.sort(reverse = False)
+            return data_file_names
+        except FileNotFoundError: print(f"The directory {data_path} does not exist.")
+    
+    def __init__sorted_file_datetimes(self) -> list[datetime]:
+        answers = []
+        
+        for file_name in self.sorted_file_names:
+            file_datetime = self._extract_datetime(file_name)
+            if file_datetime is not None: answers.append(file_datetime)
+        
+        return answers
+    
+    # Helper Functions
+    def _extract_datetime(self, file_name: str) -> Optional[datetime]:  
+        """
+        Extract the YYYYMMDD datetime from a file name.
+
+        Args:
+            file_name (str): The file name containing a YYYYMMDD datetime.
+
+        Returns:
+            Optional[datetime]: A datetime object representing the extracted YYYYMMDD datetime.
+                Returns None if no valid datetime is found.
+        """
+        import re
+        match = re.search(r'\d{8}', file_name)
+        
+        if match: return datetime.strptime(match.group(), r'%Y%m%d')
+        
+        print("No YYYYMMDD datetime matched.\n")
+        return None   
+    
+    def _is_leftDate_smallerThan_rightDate(self, left_date: datetime, right_date: datetime) -> bool:
+        return left_date < right_date
+
+    def _is_rightDate_smallerThan_leftDate(self, left_date: datetime, right_date: datetime) -> bool:
+        return right_date < left_date   
+        
+    def _filter_file_names(self, *, start_date: datetime | str, end_date: datetime | str) -> list:
+        """
+        Filter out the files within the specified date range from the sorted_file_names list.
+
+        Args:
+            start_date (datetime | str): The start date of the range (inclusive).
+                                        It can be either a datetime object or a string in the format '%Y%m%d'.
+            end_date (datetime | str): The end date of the range (inclusive).
+                                    It can be either a datetime object or a string in the format '%Y%m%d'.
+
+        Returns:
+            list: A list of file names within the specified date range.
+        """
+        if isinstance(start_date, str): start_date = datetime.strptime(start_date, r'%Y%m%d')
+        if isinstance(end_date, str): end_date = datetime.strptime(end_date, r'%Y%m%d')
+        
+        leftBound_i = binary_search(self.sorted_file_datetimes, start_date, 
+                                    self._is_leftDate_smallerThan_rightDate)
+        rightBound_i = reverse_binary_search(self.sorted_file_datetimes, end_date, 
+                                             self._is_rightDate_smallerThan_leftDate)
+
+        if any([leftBound_i == -1, rightBound_i == -1]): 
+            print(f"Filtered File Dates: []")
+            return []
+        
+        # Debugging
+        print(f"Filtered File Dates: {self.sorted_file_names[leftBound_i : rightBound_i + 1]}\n")
+        #\ Debugging
+        return self.sorted_file_names[leftBound_i : rightBound_i + 1]
+    # \Helper Functions
+    
+    # APIs
+    def get_df_between_date(self, *,
+                            data_path: str,
+                            start_date: datetime | str,
+                            end_date: datetime | str) -> list[pd.DataFrame]:
+        """
+        Get DataFrames from files within a specified date range.
+
+        Args:
+            data_path (str): The path to the directory containing the data files.
+            start_date (datetime | str): The start date of the range (inclusive).
+                                        It can be either a datetime object or a string in the format '%Y%m%d'.
+            end_date (datetime | str): The end date of the range (inclusive).
+                                    It can be either a datetime object or a string in the format '%Y%m%d'.
+
+        Returns:
+            list[pd.DataFrame]: A list of DataFrames read from files within the specified date range.
+        """
+        filtered_file_names = self._filter_file_names(start_date = start_date, end_date = end_date)
+        dfs = [pd.read_csv(data_path + file_name) for file_name in filtered_file_names]
+        
+        self.test_dfs = [df for df in dfs]
+        return dfs
+    
+    def update_and_get_train_df(self, data_path: str, test_start_yyyymmdd: str, *, 
+                                # * is here to indict the start of key-word only arguments,
+                                # Keyword-only arguments are parameters that must be passed using their names and cannot be specified positionally
+                                    movingBack_dayCount: int,
+                                    years_count: int) -> pd.DataFrame:
+        """
+        get the training DataFrame using the test_start date and the days between trainning and testing data.
+
+        Args:
+            data_path (str): The path to the directory containing the data files.
+            test_start_yyyymmdd (str): The start date of the test period in the format '%Y%m%d'.
+            movingBack_dayCount (int): The number of days to move back from the test start date to determine the training end date.
+            years_count (int): The number of years of data to include in the training set.
+
+        Returns:
+            pd.DataFrame: The training DataFrame.
+        """
+        test_start_date = datetime.strptime(test_start_yyyymmdd, r'%Y%m%d')
+        train_end_date = test_start_date - timedelta(days = movingBack_dayCount)
+        train_start_date = train_end_date - timedelta(days = consts.YEAR_DAY * years_count)
+        
+        filtered_file_names = self._filter_file_names(start_date = train_start_date, end_date = train_end_date)
+        dfs = [pd.read_csv(data_path + file_name) for file_name in filtered_file_names]
+        train_df = pd.concat(dfs, axis = consts.ROW)
+        
+        self.train_df = train_df.copy()
+        return train_df
+    # \APIs
+
+class Regression(Data):
+    def __init__(self, *, 
+                 data_path: Optional[str] = None, 
+                 regression_type: str = 'OLS', 
+                 hyperparam_dict: Optional[dict] = None):
+
+        if data_path is not None: super().__init__(data_path)
+        
+        # 
+        self.regressionName_func_map = {
+            'OLS': self._sklearn_ols_regression,
+            'LASSO': self._sklearn_LASSO_regression,
+            'XGBOOST': self._xgboost_regression }
+        #\  
+
+        # if the regression_type is valid, call the regression function with the hyperparam_dict which return a model
+        self.regression_type = regression_type
+        if self.regression_type is None: print(f"{regression_type} does not exist. {self._list_all_regression_types}.\n")
+        else: print(f"You're using: {self.regression_type}.\n")
+        self.saved_model = self.regressionName_func_map[self.regression_type](hyperparam_dict)
+        #\
+        
+        #
+        self.feature_col_names = []
+        self.interacting_terms_list = []
+        self.predicted_y_list = []
+        self.actual_y_list = []
+        #\
+    
+    # functions for input check 
+    @property
+    def regression_type(self) -> str:
+        return self._regression_type
+    @regression_type.setter
+    def regression_type(self, regression_input: str) -> None:
+        if regression_input in self.regressionName_func_map: self._regression_type = regression_input
+        elif regression_input.lower() in self.regressionName_func_map: self._regression_type = regression_input.lower()
+        elif regression_input.upper() in self.regressionName_func_map: self._regression_type = regression_input.upper()
+        elif regression_input.capitalize() in self.regressionName_func_map: self._regression_type = regression_input.capitalize()
+        else: self._regression_type = None
+        return
+
+    # Scikit-learn Region
+    def _sklearn_ols_regression(self, hyperparam_dict: Optional[dict] = None):
+        from sklearn.linear_model import LinearRegression
+        
+        returning_model = None
+        if hyperparam_dict is None: returning_model = LinearRegression()
+        else: returning_model = LinearRegression(**hyperparam_dict)
+        
+        return returning_model
+
+    def _sklearn_LASSO_regression(self, hyperparam_dict: Optional[dict] = None):
+        from sklearn.linear_model import LassoCV
+        
+        returning_model = None
+        if hyperparam_dict is None: returning_model = LassoCV()
+        else: returning_model = LassoCV(**hyperparam_dict)
+        
+        return returning_model
+
+    def _xgboost_regression(self, hyperparam_dict: Optional[dict] = None):
+        from xgboost import XGBRegressor 
+        
+        returning_model = None
+        if hyperparam_dict is None: returning_model = XGBRegressor()
+        else: returning_model = XGBRegressor(**hyperparam_dict)
+        
+        return returning_model
+    # \Scikit-learn Region
+    
+    # Helper Functions
+    def _list_all_regression_types(self) -> None:
+        print(f"Available Regression Inputs: {self.regressionName_func_map.keys()}\n")
+        return
+
+    def _get_df_with_interaction_terms(self, df: pd.DataFrame, 
+                                       interacting_terms_list: list[list[str]],
+                                       will_drop_single_interacting_term: bool = False) -> tuple[pd.DataFrame, list]:
+        """
+        Get DataFrame with interaction terms - a product of two columns.
+
+        Args:
+            df (pd.DataFrame): The input DataFrame.
+            interacting_terms_list (list[list[str]]): List of lists containing column names for interaction terms.
+            will_drop_single_interacting_term (bool, optional): Whether to drop single interacting terms. 
+
+        Returns:
+            tuple[pd.DataFrame, list]: A tuple containing the new DataFrame with interaction terms and a list of new column names.
+        """
+        new_df = df.copy()
+        new_col_names = []
+        
+        for interacting_terms in interacting_terms_list:
+            all_terms_exist = np.all(np.isin(np.ravel(interacting_terms), df.columns))
+            
+            if all_terms_exist:
+                new_col_name = str(tuple(interacting_terms))
+                new_col_names.append(new_col_name)
+                
+                new_df[new_col_name] = np.prod(new_df[interacting_terms], axis=consts.COL)
+                if will_drop_single_interacting_term: new_df.drop(interacting_terms, axis = consts.COL, inplace=True)
+            else:
+                print(f"{interacting_terms} missing!")
+                return df
+        
+        return new_df, new_col_names
+
+    def _predict(self, dataframes: list[pd.DataFrame] | pd.DataFrame, *, 
+                 hyperparam_dict: Optional[dict] = None) -> list:
+        """
+        Predict stock prices using the trained model.
+
+        Args:
+            dataframes (list[pd.DataFrame] | pd.DataFrame): Input DataFrame or list of DataFrames.
+            hyperparam_dict (Optional[dict], optional): Hyperparameters for the regression model. Defaults to None.
+
+        Returns:
+            list: List of predicted stock price values.
+        """
+        assert self.saved_model is not None, print("No model being trained yet!\n")
+        predicted_y_list = []
+
+        # if dataframe is just have one single dataframe 
+        if isinstance(dataframes, pd.DataFrame):
+            assert len(self.feature_col_names) == len(dataframes.columns)
+            
+            if hyperparam_dict is None: predicted_y = self.saved_model.predict(dataframes)
+            else: predicted_y = self.saved_model.predict(dataframes, **hyperparam_dict)
+            
+            predicted_y_list.append(predicted_y)
+        #\
+        
+        # else dataframe is a list of dataframes
+        else:
+            for i in range(len(dataframes)):
+                dataframe = dataframes[i]
+                assert len(self.feature_col_names) == len(dataframe.columns)
+
+                if hyperparam_dict is None: predicted_y = self.saved_model.predict(dataframe)
+                else: predicted_y = self.saved_model.predict(dataframe, **hyperparam_dict)
+                
+                predicted_y_list.append(predicted_y)
+        #\
+        
+        return predicted_y_list
+    # Helper Functions
+    
+    # Metric Functions
+    def _get_response_corr(self, predicted_y, actual_y) -> float:
+        return np.corrcoef(predicted_y, actual_y)[0, 1]
+
+    def _get_mean_return(self, predicted_y, actual_y) -> float:
+        return np.mean(np.abs(actual_y) * (np.sign(actual_y) * np.sign(predicted_y)))
+
+    def _get_scale_factor(self, predicted_y, actual_y):
         from sklearn.linear_model import LinearRegression
         
         model = LinearRegression(fit_intercept=False)
-        model.fit(X=train_X, y=train_y, sample_weight=sample_weight)
+        model.fit(X=pd.DataFrame({"predicted_y": predicted_y}), y=actual_y)
+        return model.coef_    
+    # \Metric Functions
 
-        if allow_internal_update: self.model = model
-        return model.coef_
-    
-    def sklearn_LASSO_regression(self, train_X, train_y, sample_weight = None, allow_internal_update = True):
-        from sklearn.linear_model import LassoCV
-        
-        model = LassoCV(cv=consts.CV, fit_intercept=False) # Higher cv, Lower bias
-        model.fit(X=train_X, y=train_y, sample_weight=sample_weight)
-        if allow_internal_update: self.model = model
-        return model.coef_     
-
-    def xgboost_regression(self, train_X, train_y, sample_weight = None, allow_internal_update = True):
-        from xgboost import XGBRegressor 
-
-        model = XGBRegressor("reg:squarederror", booster='gblinear')
-        model.fit(X=train_X, y=train_y, sample_weight=sample_weight)
-        if allow_internal_update: self.model = model
-
-        return model.get_xgb_params()
-    ### \Sklearn
-
-    ### Not being used -- split to train and evaluate methods
-    def execute(self, _train_df, _response_col_name,
-                    _test_df = None, _sample_weight = None, allow_internal_update = True):
-            copied_train_df = append_columnOf_ones(_train_df)
-            copied_test_df = append_columnOf_ones(_test_df) if (_test_df is not None) else None
-            train_X, train_y, test_X, test_y = self.__train_test_split (
-                                                _df = copied_train_df,
-                                                _test_df = copied_test_df,
-                                                _response_col_name = _response_col_name
-                                            )
-            actual_responses = test_y.copy()
-            regression_function = self.availableRegressionName_func_map[self.regression_type]
-            model_attributes = regression_function(train_X, train_y, _sample_weight)
-            predicted_responses = self.__predict(test_X)
-            if allow_internal_update:
-                self.actual_responses = actual_responses
-                # self.betas = betas
-                self.predicted_responses = predicted_responses
-            return model_attributes
-    ### \Not being used -- split to train and evaluate methods
-
-    ### Private methods
-    def __train_test_split(self, _df, _test_df, _response_col_name): #TODO: customize this!
-        train_X = _df.drop(_response_col_name, inplace=False, axis=consts.COL)
-        train_y = _df[_response_col_name]
-        
-        test_X = _test_df.drop(_response_col_name, inplace=False, axis=consts.COL)
-        test_y = _test_df[_response_col_name]
-        
-        return (train_X, train_y, test_X, test_y)        
-    
-    def __get_betas(self, train_X, train_y, sample_weight = None, allow_internal_update = False):
-        REGRESSION_TYPE = 'OLS'
-        regression_function = self.availableRegressionName_func_map[REGRESSION_TYPE]
-        return regression_function(train_X, train_y, sample_weight, allow_internal_update)
-
-        # Design choice: Make these methods "Public"?
-    def __predict(self, test_X):
-        return self.model.predict(test_X)
-    
-    def __get_predictActual_corr(self):
-        return np.corrcoef(self.predicted_responses, self.actual_responses)
-    
-    def __get_weighted_mean_return(self):
-            abs_yy = np.abs(self.actual_responses)
-            sign_yy = np.sign(self.actual_responses)
-            sign_ss = np.sign(self.predicted_responses)
-
-            return np.mean(abs_yy * sign_yy * sign_ss)
-        
-    def __get_weighted_scale_factor(self):
-        if (self.actual_responses is not None) and \
-            (self.predicted_responses is not None):
-
-            train_X = pd.DataFrame(self.predicted_responses)
-            train_y = self.actual_responses
-            return self.__get_betas(train_X, train_y)
-
-        else: return None
-        
-    ### \Private methods   
-    
-    def train(self, _train_df, _response_col_name, 
-                _sample_weight = None):
-
-        copied_train_df = append_columnOf_ones(_train_df)
-        
-        train_X = copied_train_df.drop(_response_col_name, inplace=False, axis=consts.COL)
-        train_y = copied_train_df[_response_col_name]
-        regression_function = self.availableRegressionName_func_map[self.regression_type] 
-        model_attributes = regression_function(train_X = train_X, 
-                                               train_y = train_y, sample_weight = _sample_weight) 
-
-        return model_attributes
-    
-    def train_model(self, train_df:pd.DataFrame, response:str, sample_weights = None):
-        """Trains a model with a training data frame
+    # APIs
+    def train(self, dataframe: Optional[pd.DataFrame] = None, *,
+                    feature_col_names: list[str] = [],
+                    interacting_terms_list: list[list[str]] = [],
+                    hyperparam_dict: Optional[dict] = None) -> None:
         """
-        train_df = append_columnOf_ones(train_df) #???
+        Train the regression model.
 
-        #Split into X and y
-        train_X = train_df.drop(response, inplace=False, axis=consts.COL)
-        train_y = train_df[response]
+        Args:
+            dataframe (Optional[pd.DataFrame], optional): Training data. Defaults to None.
+            feature_col_names (list[str], optional): List of feature column names. Defaults to an empty list.
+            interacting_terms_list (list[list[str]], optional): List of interacting terms. Defaults to an empty list.
+            hyperparam_dict (Optional[dict], optional): Hyperparameters for training. Defaults to None.
 
-        regression_function = self.availableRegressionName_func_map[self.regression_type]   
-        model_attributes = regression_function(train_X, train_y, sample_weights) 
-        return model_attributes
-
-    ### Get metrics
-    def evaluate_model(self, test_start:str, test_end:str, x_cols:[str],data_path:str, list_of_interacting_terms:[[str]]):
-        """Evaluates the model by taking average metrics between the start and end days. 
-        
-        Args: 
-        test_start (str): Start date of evaluation. YYYYMMDD
-        test_end (str): End data of model evaluatino. YYYYMMDD
-        x_cols: list of predictors to use. 
-        data_path: The path to find the test data
+        Raises:
+            Exception: Raised if no training data is provided, and no existing training data is available.
         """
-        if data_path == None:
-           print("No Path given")
-           return 
-        filenames = get_file_names(test_start, test_end, data_path)
-        print(f"filenames = {filenames}")
-
-        wt_corr, wt_mean_ret, wt_sf = [], [], []
-
-        for file in filenames:
-            df = pd.read_csv(data_path + file)
-            df, _ = get_df_with_interaction_terms(df, list_of_interacting_terms)
-            test_X = df[x_cols]
-            test_X = append_columnOf_ones(test_X)
-
-            predicted_y = self.__predict(test_X)
-
-            self.predicted_responses = predicted_y
-            self.actual_responses = df[consts.RESPONSE_NAME]
-
-            corr,ret,sf = self.get_metric(printMetrics=True)
-            wt_corr.append(corr[0][1])
-            wt_mean_ret.append(ret)
-            wt_sf.append(sf)
+        copied_dataframe = dataframe.copy()
+        if copied_dataframe is None and self.train_df is None: raise Exception("Can't train when nothing is given.\n")
         
-        avg_wt_corr = np.average(wt_corr) # Could be cleaner with mapping. 
-        avg_wt_mean = np.average(wt_mean_ret)
-        avg_wt_sf = np.average(wt_sf)
-        # print(f"Average Weighted Correlation: {avg_wt_corr}")
-        # print(f"Average Mean Return: {avg_wt_mean}")
-        # print(f"Average weighted Scale Factor: {avg_wt_sf}")
-        return avg_wt_corr,avg_wt_mean,avg_wt_sf
+        # getting the training df (either from class variable or the input of this method)
+        training_df = self.train_df if (self.train_df is not None) else copied_dataframe
+        training_df, new_col_names = self._get_df_with_interaction_terms(training_df, interacting_terms_list)
+        #\
 
-    def get_metric(self, printMetrics = True):
-        """Print metrics defind by Scott
-
-        Returns: [weighted_corr, mean_return, scale_factor]
+        # getting the response variables and drop it from the training df
+        train_y = training_df[consts.RESPONSE_NAME]
+        if consts.RESPONSE_NAME in set(training_df.columns):
+            train_X = training_df.drop(consts.RESPONSE_NAME, axis=consts.COL, inplace=False)
+        #\        
+        
+        # first, add the interacting term columns. Then, if this method is called with a feature_col_names then used them 
+        # as additional training_features, else just use all columns as training features 
+        training_features = []
+        training_features.extend(new_col_names)
+        
+        if len(feature_col_names) > 0: training_features.extend(feature_col_names)
+        else: training_features.extend(train_X.columns)
+        train_X = training_df[training_features]
+        #\
+        
+        # if no hyperparam is used, then fit the model with out hyperparameter 
+        if hyperparam_dict is None: self.saved_model.fit(train_X, train_y)
+        else: self.saved_model.fit(train_X, train_y, **hyperparam_dict)
+        #\
+        
+        # update self.feature_col_names class variables after we get all the training features after line 404
+        self.interacting_terms_list = interacting_terms_list
+        self.feature_col_names = training_features
+        #\
+        
+        print(f"Features being used: {self.feature_col_names}")
+        return
+        
+    def get_metric(self, dataframes: Optional[list[pd.DataFrame] | pd.DataFrame] = None, *, 
+                        hyperparam_dict: Optional[dict] = None) -> None:
         """
-        weighted_corr = self.__get_predictActual_corr()
-        weighted_mean_return = self.__get_weighted_mean_return()
-        weighted_scale_factor = self.__get_weighted_scale_factor()
+        Get metrics for the regression model using existing test data.
+
+        Args:
+            dataframes (Optional[list[pd.DataFrame] | pd.DataFrame], optional): Test data. Defaults to None.
+            hyperparam_dict (Optional[dict], optional): Hyperparameters for prediction. Defaults to None.
+
+        Raises:
+            Exception: Raised if no test data is provided, and no existing test data is available.
+
+        Returns:
+            None
+        """
+        if dataframes is None and self.test_dfs == []: raise Exception("Can't test when nothing is given.\n")
+        input_dfs = self.test_dfs if len(self.test_dfs) > 0 else dataframes
         
-        if printMetrics:
-            print(f"1. Weighted Correlation:\n{weighted_corr}\n")
-            print(f"2. Weighted Mean Return:\n{weighted_mean_return}\n")
-            print(f"3. Weighted Scale Factor:\n{weighted_scale_factor}\n")
-        
-        return (weighted_corr, weighted_mean_return, weighted_scale_factor)
-        
-def build_feature_map(filename: str, filetype: str = None): #-> dict[str,str]
-    """Return a feature_name_str -> feature_description_str map,
-    given that each line in the input file 'filename' has this STRICT format:
-    
-    'feature_name' - 'feature_description' 
-    [a string (or empty), a space, '-', a space, a string (or empty)]
-
-    Args:
-        filename (str): the filename you want to use. Must specify file type
-        either in 'filename' or 'filetype'
-        
-        filetype (str): a string of file type WITHOUT DOTS.
-    """
-    
-    # Edge cases...
-    if (not filename) or ((not re.match(r'.+\.+.+', filename)) and (not filetype)):
-        print(f"Returned Empty. '{filename}' is not a valid file name")
-        return {}
-    
-    if filetype:
-        if filetype.count('.') > 1:
-            print(f"Returned Empty. Please remove to < 1 dot in {filetype}")
-            return {}
-        
-        if filetype.find('.') > 0:
-            print(f"Return Empty. Please only place the '.' in {filetype}'s 1st position")
-            return {}
-    # ...Edge cases
-
-    # Build file path...
-    if filetype:
-        if (filetype[0] == '.'): filename = filename + filetype
-        else: filename = filename + '.' + filetype
-    file_path = consts.RAW_DATA_PATH + filename
-    # ...Build file path
-
-    # Read the file...
-    lines = []
-    try:
-        file = open(file_path, "r")
-        lines = file.readlines()
-        file.close()
-    except:
-        print(f"Returned empty. Can't open file {filename}.")
-        return {}
-    # ...Read the file
-    
-    # Build the feature_description_map...
-    answer = {}
-    
-    validLines_count = 0 # For testing
-    for line in lines:
-        line = line.strip()
-        if len(line) == 0: continue
-
-        validLines_count += 1
-        
-        line = line.replace("\n", '')  # Remove next-line symbol
-
-        feature, description = tuple(line.split(" - "))
-        feature = feature.strip()
-        description = description.strip()
-        
-        if len(feature) > 0:
-            if feature in answer:
-                print("Feature already in FEATURE_DESCRIPTION_MAP. Updating {feature} description instead...")
-            answer[feature] = description
-    # ...Build the feature_description_map
-    
-    assert validLines_count == len(answer), \
-    "There exists nonempty lines not included in FEATURE_DESCRIPTION_MAP"
-
-    return answer
-
-def explain_all_features(filename = "data_description.txt") -> None:
-    """Generate a well-formatted, alphabetically ordered
-    descriptions of all features in 'data_description.txt'
-    """
-    FEATURE_DESCRIPTION_MAP = build_feature_map(filename)    
-    alphabetically_sorted_features = sorted(FEATURE_DESCRIPTION_MAP.keys())
-    
-    for feature in alphabetically_sorted_features:
-        description = FEATURE_DESCRIPTION_MAP[feature]
-        print(f"Feature: {feature}\nMeaning: {description}\n")
-    
-    return
-
-def explain_feature(feature_name: str, filename = "data_description.txt") -> None:
-    """Print the description of the feature 'feature_name'
-    from "data_description.txt"
-
-    Args:
-        feature_name (str, optional): the feature name you want. Defaults to None.
-
-    Returns:
-        str: the description of the input feature
-    """
-    FEATURE_DESCRIPTION_MAP = build_feature_map(filename)
-    
-    if not feature_name: explain_all_features(filename)
-    elif feature_name not in FEATURE_DESCRIPTION_MAP: raise Exception(f"Feature '{feature_name}' not exists.")
-    else: print(FEATURE_DESCRIPTION_MAP[feature_name])
-    
-    return
-
-def shapiro_test(residuals) -> None:
-    """Perform a Shapiro test of whether a list of data is normally distributed
-    
-    Args:
-        residuals: a list-like object of similarly typed data
-    """
-    import scipy.stats as stats
-    
-    shapiro_test_statistic, shapiro_p_value = stats.shapiro(residuals)
-    alpha = 0.05  # Significance level
-    if shapiro_p_value > alpha: print(f"Shapiro-Wilk Test: Residuals normally distributed.")
-    else: print(f"Shapiro-Wilk Test: Residuals NOT normally distributed.")
-    
-    return
-
-def white_test(residuals, df) -> None:
-    """Perform a White test of heteroskedasticity 
-    for a simple linear regression model
-
-    Args:
-        df (DataFrame): the testing data (X)
-        residuals: a list-like object of similarly typed data
-    """
-    assert isinstance(df, pd.DataFrame), "2nd argument is not a DataFrame"
-    import statsmodels.api as sm
-
-    white_testing_df = sm.add_constant(df)
-    white_test = sm.stats.diagnostic.het_white(residuals, white_testing_df)
-    white_p_value = white_test[1]
-
-    alpha = 0.05 # Significant level
-    if white_p_value < alpha: print(f"White Test: Residuals have constant variance.")
-    else: print(f"White Test: Residuals DO NOT have constant variance.")
-
-    return
-    
-def bp_test(residuals, df) -> None:
-    """Perform a Breusch-Pagan test of heteroskedasticity 
-    for a multiple linear regression model
-
-    Args:
-        df (DataFrame): the testing data (X)
-        residuals: a list-like object of similarly typed data
-    """
-    assert isinstance(df, pd.DataFrame), "2nd argument is not a DataFrame"
-    import statsmodels.api as sm    
-    bp_testing_df = sm.add_constant(df)
-    bp_test = sm.OLS(residuals**2, bp_testing_df).fit()
-    bp_p_value = bp_test.pvalues[1]
-
-    alpha = 0.05 # Significant level
-    if bp_p_value < alpha: print(f"Breusch-Pagan Test: Residuals have constant variance.")
-    else: print(f"Breusch-Pagan Test: Residuals DO NOT have constant variance.")   
-    
-    return
-
-def vif_test(r_squared: float):
-    """Perform a VIF test for multi-collinearity
-
-    Args:
-        r_squared (float): the r-squared value of a regression model.
-    """
-    vif = 1.0 / (1 - r_squared)
-
-    if vif < 1: print(f"VIF = {vif}. This model performs worse than a horizontal line :(")
-    elif vif == 1: print(f"VIF = {vif}. All predictors are independent :)")
-    elif 1 < vif < 5: print(f"VIF = {vif}. Some dependent predictors exist.")
-    else: print(f"VIF = {vif}. Too many dependent predictors!") # vif >= 5
-
-    return
-
-def append_columnOf_ones(X):
-    """Add a column of 1 to the right-most position of input DataFrame
-
-    Args:
-        X (DataFrame): input DataFrame
-
-    Returns:
-        DataFrame: a new DataFrame with a column of 1 added to the right
-    """
-    return X.assign(b0=1)
-
-def get_df_with_interaction_terms(df: pd.DataFrame, interacting_terms_list:, will_drop_single_interacting_term = False):
-    """Return a new DataFrame that has interacting column pairs
-
-    Args:
-        df (DataFrame): original training data
-        interacting_terms_list (list of list): list of column pairs
-
-    Returns:
-        DataFrame: resulting DataFrame
-    """
-    new_df = df.copy()
-    new_col_names = []
-    for interacting_terms in interacting_terms_list:
-        all_terms_exist = np.all(np.isin(np.ravel(interacting_terms), df.columns))
-        if all_terms_exist:
-            new_col_name = str(tuple(interacting_terms))
-            new_col_names.append(new_col_name)
-            new_df[new_col_name] = np.prod(new_df[interacting_terms], axis=consts.COL)
+        def _get_test_X(input_df: pd.DataFrame) -> pd.DataFrame:
+            if consts.RESPONSE_NAME in set(input_df.columns): 
+                input_df.drop(consts.RESPONSE_NAME, axis=consts.COL, inplace=True)
+                
+            test_X, _ = self._get_df_with_interaction_terms(input_df, self.interacting_terms_list)
+            if len(self.feature_col_names) > 0: test_X = test_X[self.feature_col_names]
             
-            if will_drop_single_interacting_term: new_df.drop(interacting_terms, axis = consts.COL, inplace=True)
+            return test_X         
+        
+        if isinstance(dataframes, pd.DataFrame):
+            test_y = dataframes[consts.RESPONSE_NAME]
+            test_X = _get_test_X(dataframes.copy())
+            
+            self.actual_y_list = [test_y]
+            self.predicted_y_list = self._predict(testing_df, hyperparam_dict = hyperparam_dict)
         else:
-            print(f"{interacting_terms} missing!")
-            return df
+            input_dfs = [dataframe.copy() for dataframe in dataframes]
+            actual_y_list = [input_df[consts.RESPONSE_NAME] for input_df in input_dfs]
+            for i, input_df in enumerate(input_dfs):
+                test_X = _get_test_X(input_df)
+                input_dfs[i] = test_X
 
-    return new_df, new_col_names
+            self.actual_y_list = actual_y_list
+            self.predicted_y_list = self._predict(input_dfs, hyperparam_dict = hyperparam_dict)
 
-def get_file_names(start, end, data_path)->list:
-    """Gets the file names between the start and end. 
-    Example parameter: 20150101 is January 1st 2015. yyyymmdd
-    
-    Args: 
-    start (string): Start date of training
-    end (string): Past the end date of training. Not included
+        assert len(self.predicted_y_list) == len(self.actual_y_list), \
+        print(f"len(predicted_y_list) != len(actual_y_list)\n")
+        
+        # pair the prediced_y and actual_y from each df together 
+        # for each pair, we get their 3 metrics and take the average of all
+        predict_actual_pairs = list(zip(self.predicted_y_list, self.actual_y_list))
+        response_corr = np.mean([self._get_response_corr(*predict_actual_pair) # * used here to break the pair apart to pattern match (?) predicted_y and actual_y?
+                                 for predict_actual_pair in predict_actual_pairs])
+        mean_return = np.mean([self._get_mean_return(*predict_actual_pair)
+                               for predict_actual_pair in predict_actual_pairs])
+        scale_factor = np.mean([self._get_scale_factor(*predict_actual_pair)
+                                for predict_actual_pair in predict_actual_pairs])
+        #\
 
-    Returns: 
-        List[string]: List of all training files. 
-    """
-    files = os.listdir(data_path)
-    files = sorted(filter(lambda fname: fname < f"data.{end}" and fname >= f"data.{start}", files))
-    return files
-
-def get_df(start:str, end:str, x_cols, data_path, interacting_terms = [])-> pd.DataFrame:
-    """Reads data from files to get a df of all days between start and end date
-    Args: 
-    start: Starting date
-    end: Ending date of training
-    x_cols: x_columns to train on
-    interacting_terms: Columns to multiply together. 
-    Returns: 
-    Dataframe: training df and testing df. 
-    """
-    files = get_file_names(start, end, data_path)
-    dfs = [pd.read_csv(data_path+ f) for f in files]
-    full_df = pd.concat(dfs)
-    # call interacting terms fn (needs a little more to ensure cols get saved. )
-    saved_cols = x_cols + [consts.RESPONSE_NAME]
-    return full_df[saved_cols]
-    
-
-def get_train_from_testday(testday):
-    """Reads the testday from input and parse the day to get the range of train dates
-    Args: 
-    testday: a day of the test month, in form of yyyymmdd. (day is irrelevant)
-    """
-    year = int(testday[:4])
-    month_str = testday[4:6]
-    month_int = int(month_str)
-    day = int(testday[6:])
-    if month_str == "01":
-        trainMonth = 11
-        startYear = year - 2
-    elif month_str == "02":
-        trainMonth = 12
-        startYear = year - 2
-    else:
-        trainMonth = month_int - 2
-        startYear = year - 1   
-    zero = "0" * (trainMonth < 10) # checks if zero is needed
-    startDay = str(startYear) + zero + str(trainMonth) + "01"
-
-    endDay = str(startYear+1) + zero + str(trainMonth) + "01"
-
-    return [startDay, endDay]
-    
-
-    # for the get_file_names method, if the startday does not exist, is that okay
-    # do they just return the dates inbetween 2 days even if these dates on the end of ranges does not exist
-    # This should be good -- uses the < and > operators on strings. 
-
-def get_weights(df):
-    """ return a vector of weights corresponding to each sample of the training df
-    Args:
-    df: training dataframe, pandas dataframe object
-    """
-    n = df.shape[0]
-    blockSize = n/12
-    weights = [i/blockSize+0.5 for i in range(n)]
-    return weights
+        print(f"response_corr = {response_corr}")
+        print(f"mean_return = {mean_return}")
+        print(f"scale factor = {scale_factor}")
+        
+        return
+    # \APIs
