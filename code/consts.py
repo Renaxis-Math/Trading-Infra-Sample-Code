@@ -5,6 +5,10 @@ RESPONSE_NAME = "tonight"
 
 YEAR_DAY = 365
 DATA_FILTER_KEYWORD = "data"
+RESPONSE_NAME = "tonight"
+
+YEAR_DAY = 365
+DATA_FILTER_KEYWORD = "data"
 ROW = 0
 COL = 1
 CV = 10
@@ -37,3 +41,8 @@ PATH_MAP = {"RYAN":RAW_DATA_PATH_RYAN,
 # If modifying these SCOPES, delete the file token.pickle.
 SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
 >>>>>>> cb3980d8b8e1f36703245298b239fcd22d0314c1
+
+ID = 'eqid'
+
+FOLDER_ID = "16TQJZlcZCRumroY4E-gfzf65kvn4K2EZ"
+SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
