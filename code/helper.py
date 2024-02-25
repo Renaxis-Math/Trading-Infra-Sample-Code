@@ -377,6 +377,104 @@ class Model(Data):
             return
 
     if "APIs":
+        def _stepwise_feature_selection(self, dataframe: Optional[pd.DataFrame] = None, *,
+                                       feature_col_names: list[str] = [],
+                                       interacting_terms_list: list[list[str]] = [],
+                                       significance_level: float = 0.05,
+                                       max_iterations: int = 100,
+                                       verbose: bool = True) -> list:
+            """
+                Preforms bidirectional stepwise regression.
+                Args:
+                    dataframe (Optional[pd.DataFrame], optional): Training data. Defaults to None.
+                    feature_col_names (list[str], optional): List of feature column names. Defaults to an empty list.
+                    interacting_terms_list (list[list[str]], optional): List of interacting terms. Defaults to an empty list.
+                    significance_level (float, optional): sigificance level for keeping a variable. Defaults to 0.05.
+                    max_iterations (int, optional): maximum number of iterations that will be preformed. Defaults to 100
+                    verbose (bool, optional) : 
+                Raises:
+                    Exception: Raised if no training data is provided, and no existing training data is available.
+            """
+            from sklearn.feature_selection import f_regression
+
+            # Lifted from train API to get the approriate x and y please let me know if this is wrong or there is an easier way
+            copied_dataframe = dataframe.copy()
+            if copied_dataframe is None and self.train_df is None: raise Exception("Can't train when nothing is given.\n")
+
+            # getting the training df (either from class variable or the input of this method)
+            training_df = self.train_df if (self.train_df is not None) else copied_dataframe
+            training_df, new_col_names = self._get_df_with_interaction_terms(training_df, interacting_terms_list)
+            #\
+
+            # getting the response variables and drop it from the training df
+            train_y = training_df[consts.RESPONSE_NAME]
+            if consts.RESPONSE_NAME in set(training_df.columns):
+                train_X = training_df.drop(consts.RESPONSE_NAME, axis=consts.COL, inplace=False)
+            #\        
+
+            # first, add the interacting term columns. Then, if this method is called with a feature_col_names then used them 
+            # as additional training_features, else just use all columns as training features 
+            training_features = []
+            training_features.extend(new_col_names)
+
+            if len(feature_col_names) > 0: training_features.extend(feature_col_names)
+            else: training_features.extend(train_X.columns)
+            train_X = training_df[training_features]
+            #\
+
+            predictors = set(train_X.columns)
+            selected_predictors = []
+            iteration = 1
+
+            while True:
+                if verbose: print(f"Iteration #{iteration}")
+                best_p_value = float('inf')
+                best_predictor = None
+
+                # Foward selection
+                for predictor in predictors:
+                    current_predictors = selected_predictors + [predictor]
+                    current_features = train_X[current_predictors]
+
+                    _, p_values = f_regression(current_features, train_y)
+                    p_value = p_values[-1]  
+
+                    if p_value < best_p_value:
+                        best_p_value = p_value
+                        best_predictor = predictor
+
+                if best_p_value >= significance_level:
+                    if verbose: print("No predictor meets the significance level.")
+                    break
+
+                # add best_predictor
+                selected_predictors.append(best_predictor)
+                predictors.remove(best_predictor)
+                if verbose: print(f"Added predictor: {best_predictor}, P-value: {best_p_value}")
+
+                # Backward Selection
+                removed_predictors = []
+                current_features = train_X[selected_predictors]
+                _, p_values = f_regression(current_features, train_y)
+
+                for i, prev_predictor in enumerate(selected_predictors):
+                    p_value = p_values[i]
+
+                    # mark insigficant variables for removal
+                    if p_value >= significance_level:
+                        removed_predictors.append(prev_predictor)
+
+                for removed_predictor in removed_predictors:
+                    selected_predictors.remove(removed_predictor)
+                    if verbose: print(f"Removing predictor: {prev_predictor} due to insignificance")
+
+                iteration += 1
+
+                if iteration > max_iterations:
+                    if verbose: print("Maximum number of iterations reached.")
+                    break
+
+            return selected_predictors
         def train(self, dataframe: Optional[pd.DataFrame] = None, *,
                         feature_col_names: list[str] = [],
                         interacting_terms_list: list[list[str]] = [],
