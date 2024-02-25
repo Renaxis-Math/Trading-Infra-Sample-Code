@@ -25,10 +25,7 @@ import io, os, pickle
 import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
 
-# If modifying these SCOPES, delete the file token.pickle.
-SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
-
-def downloaded_all_data(output_dir: str):
+def downloaded_all_data(output_dir: str, file_count: int) -> None:
     if "Credentials stuff":
         creds = None
         if os.path.exists('token.pickle'):
@@ -39,23 +36,22 @@ def downloaded_all_data(output_dir: str):
                 creds.refresh(Request())
             else:
                 flow = InstalledAppFlow.from_client_secrets_file(
-                    'credentials.json', SCOPES)
+                    'credentials.json', consts.SCOPES)
                 creds = flow.run_local_server(port=0)
             with open('token.pickle', 'wb') as token:
                 pickle.dump(creds, token)
 
     if "Access":
         service = build('drive', 'v3', credentials=creds)
-        results = service.files().list(
-            q="'{}' in parents".format(consts.FOLDER_ID), pageSize=10, 
-                                        fields="nextPageToken, files(id, name)").execute()
+        results = service.files().list(q="'{}' in parents".format(consts.FOLDER_ID), 
+                                       pageSize=file_count, 
+                                       fields="nextPageToken, files(id, name)").execute()
         items = results.get('files', [])
 
     if not items: print('No files found.')
     else:
         print("==> Downloading data from Google Drive...")
         for item in items:
-            print(u'{0} ({1})'.format(item['name'], item['id']))
             request = service.files().get_media(fileId=item['id'])
             if not os.path.exists(output_dir): os.mkdir(output_dir)
             
@@ -64,7 +60,6 @@ def downloaded_all_data(output_dir: str):
             done = False
             while done is False:
                 status, done = downloader.next_chunk()
-                print("Download %d%%." % int(status.progress() * 100))
     
     print(f"Finish downloading {len(items)} files to ./{output_dir}")
     return
