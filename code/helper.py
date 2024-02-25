@@ -25,8 +25,19 @@ import io, os, pickle
 import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
 
-# If modifying these SCOPES, delete the file token.pickle.
-SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
+def get_beta_standard_errors(residuals: list[float], *, sample_size: int, beta_count: int) -> dict:
+    residual_sum_of_squares = residuals.T @ residuals 
+    sigma_squared_hat = residual_sum_of_squares[0, 0] / (sample_size - beta_count) 
+    var_beta_hat = np.linalg.inv(X_with_intercept.T @ X_with_intercept) * sigma_squared_hat 
+    
+    betaIndex_SE_map = {}
+    for i in range(beta_count): 
+        standard_error = var_beta_hat[i, i] ** 0.5 
+        betaIndex_SE_map[i] = standard_error
+    
+    return betaIndex_SE_map
+
+# Generalized Methods
 
 def downloaded_all_data(output_dir: str):
     if "Credentials stuff":
@@ -39,7 +50,7 @@ def downloaded_all_data(output_dir: str):
                 creds.refresh(Request())
             else:
                 flow = InstalledAppFlow.from_client_secrets_file(
-                    'credentials.json', SCOPES)
+                    'credentials.json', consts.SCOPES)
                 creds = flow.run_local_server(port=0)
             with open('token.pickle', 'wb') as token:
                 pickle.dump(creds, token)
@@ -58,18 +69,17 @@ def downloaded_all_data(output_dir: str):
             print(u'{0} ({1})'.format(item['name'], item['id']))
             request = service.files().get_media(fileId=item['id'])
             if not os.path.exists(output_dir): os.mkdir(output_dir)
-
+            
             files = io.FileIO(os.path.join(output_dir, item['name']), 'wb')
             downloader = MediaIoBaseDownload(files, request)
             done = False
             while done is False:
                 status, done = downloader.next_chunk()
                 print("Download %d%%." % int(status.progress() * 100))
-
+    
     print(f"Finish downloading {len(items)} files to ./{output_dir}")
     return
 
-# Generalized Methods
 def binary_search(sorted_items: list, target, elimination_func):
     """
     Used in filter_file_name to perform binary search on a sorted list to find the index of a target element.
@@ -83,15 +93,15 @@ def binary_search(sorted_items: list, target, elimination_func):
         int: The index of the target element if found; otherwise, returns -1.
     """
     if sorted_items is None: return -1
-
+    
     left_i ,right_i = 0, len(sorted_items) - 1 
-
+    
     while left_i < right_i:
         mid_i = left_i + (right_i - left_i) // 2
 
         if elimination_func(sorted_items[mid_i], target): left_i = mid_i + 1
         else: right_i = mid_i
-
+        
     return left_i
 
 def reverse_binary_search(sorted_items: list, target, elimination_func):
@@ -109,12 +119,12 @@ def reverse_binary_search(sorted_items: list, target, elimination_func):
     if sorted_items is None: return -1
 
     left_i ,right_i = 0, len(sorted_items) - 1  
-
+    
     while left_i < right_i:
         mid_i = left_i + (right_i - left_i) // 2 + 1
         if elimination_func(sorted_items[mid_i], target): right_i = mid_i - 1 
         else: left_i = mid_i
-
+        
     return right_i
 # \Generalized Methods
 
@@ -137,7 +147,7 @@ class Data:
         self.train_df = train_data
         self.test_dfs = test_data
         return
-
+    
     @property
     def data_path(self) -> str:
         return self._data_path
@@ -151,7 +161,7 @@ class Data:
             downloaded_all_data(train_data_path);           
         self._data_path = train_data_path
         return
-
+    
     # APIs
     """Main API
     Extend this!
@@ -179,7 +189,7 @@ class Data:
         test_start_date = datetime.strptime(test_start_yyyymmdd, r'%Y%m%d')
         train_end_date = test_start_date - timedelta(days = backward_dayCount)
         train_start_date = train_end_date - timedelta(days = consts.YEAR_DAY * years_count + train_data_count)
-
+        
         filtered_file_names = self._filter_file_names(start_date = train_start_date, end_date = train_end_date)
         dfs = [pd.read_csv(self.data_path + file_name) for file_name in filtered_file_names]
         if len(dfs) > 0: train_df = pd.concat(dfs, axis = consts.ROW)
@@ -187,7 +197,7 @@ class Data:
             train_df = pd.DataFrame()
             print(f"File w/ end date {train_end_date} does not exist.")
             print(f"Please update 'backward_dayCount' or increase 'train_data_count' (currently {train_data_count}).")
-
+        
         self.train_df = train_df
         return train_df if concat else dfs
 
@@ -214,7 +224,7 @@ class Data:
             end_date = start_date + timedelta(days=forward_dayCount)
         filtered_file_names = self._filter_file_names(start_date = start_date, end_date = end_date)
         dfs = [pd.read_csv(data_path + file_name) for file_name in filtered_file_names]
-
+        
         self.test_dfs = dfs
         return dfs
 
@@ -231,16 +241,16 @@ class Data:
             data_file_names.sort(reverse = False)
             return data_file_names
         except FileNotFoundError: print(f"The directory {data_path} does not exist.")
-
+    
     def _init_sorted_file_datetimes(self) -> list[datetime]:
         answers = []
-
+        
         for file_name in self.sorted_file_names:
             file_datetime = self._extract_datetime(file_name)
             if file_datetime is not None: answers.append(file_datetime)
-
+        
         return answers    
-
+    
     def _extract_datetime(self, file_name: str) -> Optional[datetime]:  
         """
         Extract the YYYYMMDD datetime from a file name.
@@ -254,18 +264,18 @@ class Data:
         """
         import re
         match = re.search(r'\d{8}', file_name)
-
+        
         if match: return datetime.strptime(match.group(), r'%Y%m%d')
-
+        
         print("No YYYYMMDD datetime matched.\n")
-        return None
-
+        return None   
+    
     def _is_leftDate_smallerThan_rightDate(self, left_date: datetime, right_date: datetime) -> bool:
         return left_date < right_date
 
     def _is_rightDate_smallerThan_leftDate(self, left_date: datetime, right_date: datetime) -> bool:
         return right_date < left_date   
-
+        
     def _filter_file_names(self, *, start_date: datetime | str, end_date: datetime | str) -> list:
         """
         Filter out the files within the specified date range from the sorted_file_names list.
@@ -282,8 +292,8 @@ class Data:
         if isinstance(start_date, str): start_date = datetime.strptime(start_date, r'%Y%m%d')
         if isinstance(end_date, str): end_date = datetime.strptime(end_date, r'%Y%m%d')
         print(f"Getting files from {start_date} to {end_date}, inclusive.")
-
-
+        
+        
         leftBound_i = binary_search(self.sorted_file_datetimes, start_date, 
                                     self._is_leftDate_smallerThan_rightDate)
         rightBound_i = reverse_binary_search(self.sorted_file_datetimes, end_date, 
@@ -292,12 +302,12 @@ class Data:
         if any([leftBound_i == -1, rightBound_i == -1]): 
             print(f"Filtered File Dates: []")
             return []
-
+        
         # Debugging
         print(f"Filtered File Dates: {self.sorted_file_names[leftBound_i : rightBound_i + 1]}\n")
         #\ Debugging
         return self.sorted_file_names[leftBound_i : rightBound_i + 1]
-    # \Helper Functions  
+    # \Helper Functions    
 
 
 """Model Class works with 1 training data and N testing data
@@ -310,33 +320,32 @@ class Model(Data):
                  hyperparam_dict: Optional[dict] = None):
 
         super().__init__()
-
+        
         """ TODO: Step 3
-
+        
         Add a key-value after finishing a new function.
         """
         self.name_model_map = {
             'OLS': self._sklearn_ols_regression,
             'LASSO': self._sklearn_LASSO_regression,
-            'ELASTICNET': self._sklearn_ElasticNet_regression,
             'XGBOOST': self._xgboost_regression,
             'DecisionTreeClassifier': self._sklearn_tree_classifier,
             'RandomForestClassifier': self._random_forest_classifier
             }
-
+        
         self.metric = {
             'response_corr': self._get_response_corr,
             'mean_return': self._get_mean_return,
             'scale_factor': self._get_scale_factor
         }
-
+        
         self.metric_output = {
             'response_corr': None,
             'mean_return': None,
             'scale_factor': None
         }
         #\  
-      
+                
         self.feature_col_names, self.interacting_terms_list = [], []
         self.predicted_y_list, self.actual_y_list = [], []
 
@@ -351,7 +360,7 @@ class Model(Data):
         self.inner = self.name_model_map[self.model_type](hyperparam_dict)
         self.print_model(); return
         # \
-
+    
     if "functions for input check":
         @property
         def model_type(self) -> str:
@@ -386,7 +395,7 @@ class Model(Data):
             """
             copied_dataframe = dataframe.copy()
             if copied_dataframe is None and self.train_df is None: raise Exception("Can't train when nothing is given.\n")
-
+            
             # getting the training df (either from class variable or the input of this method)
             training_df = self.train_df if (self.train_df is not None) else copied_dataframe
             training_df, new_col_names = self._get_df_with_interaction_terms(training_df, interacting_terms_list)
@@ -397,30 +406,30 @@ class Model(Data):
             if consts.RESPONSE_NAME in set(training_df.columns):
                 train_X = training_df.drop(consts.RESPONSE_NAME, axis=consts.COL, inplace=False)
             #\        
-
+            
             # first, add the interacting term columns. Then, if this method is called with a feature_col_names then used them 
             # as additional training_features, else just use all columns as training features 
             training_features = []
             training_features.extend(new_col_names)
-
+            
             if len(feature_col_names) > 0: training_features.extend(feature_col_names)
             else: training_features.extend(train_X.columns)
             train_X = training_df[training_features]
             #\
-
+            
             # if no hyperparam is used, then fit the model with out hyperparameter 
             if hyperparam_dict is None: self.inner.fit(train_X, train_y)
             else: self.inner.fit(train_X, train_y, **hyperparam_dict)
             #\
-
+            
             # update self.feature_col_names class variables after we get all the training features after line 404
             self.interacting_terms_list = interacting_terms_list
             self.feature_col_names = training_features
             #\
-
+            
             print(f"Features being used: {self.feature_col_names}")
             return
-
+        
         def test(self, test_data: Optional[list[pd.DataFrame] | pd.DataFrame] = None, *, 
                         hyperparam_dict: Optional[dict] = None) -> None:
             """
@@ -524,15 +533,6 @@ class Model(Data):
             else: returning_model = LassoCV(**hyperparam_dict)
             
             return returning_model
-        
-        def _sklearn_ElasticNet_regression(self, hyperparam_dict: Optional[dict] = None):
-            from sklearn.linear_model import ElasticNetCV
-
-            returning_model = None
-            if hyperparam_dict is None: returning_model = ElasticNetCV()
-            else: returning_model = ElasticNetCV(**hyperparam_dict)
-
-            return returning_model
 
         def _xgboost_regression(self, hyperparam_dict: Optional[dict] = None):
             from xgboost import XGBRegressor 
@@ -574,7 +574,7 @@ class Model(Data):
             """
             new_df = df.copy()
             new_col_names = []
-
+            
             for interacting_terms in interacting_terms_list:
                 all_terms_exist = np.all(np.isin(np.ravel(interacting_terms), df.columns))
                 
@@ -587,110 +587,8 @@ class Model(Data):
                 else:
                     print(f"{interacting_terms} missing!")
                     return df
-
+            
             return new_df, new_col_names
-
-
-        def _stepwise_feature_selection(self, dataframe: Optional[pd.DataFrame] = None, *,
-                                       feature_col_names: list[str] = [],
-                                       interacting_terms_list: list[list[str]] = [],
-                                       significance_level: float = 0.05,
-                                       max_iterations: int = 100,
-                                       verbose: bool = True) -> list:
-            """
-                Preforms bidirectional stepwise regression.
-
-                Args:
-                    dataframe (Optional[pd.DataFrame], optional): Training data. Defaults to None.
-                    feature_col_names (list[str], optional): List of feature column names. Defaults to an empty list.
-                    interacting_terms_list (list[list[str]], optional): List of interacting terms. Defaults to an empty list.
-                    significance_level (float, optional): sigificance level for keeping a variable. Defaults to 0.05.
-                    max_iterations (int, optional): maximum number of iterations that will be preformed. Defaults to 100
-                    verbose (bool, optional) : 
-
-                Raises:
-                    Exception: Raised if no training data is provided, and no existing training data is available.
-            """
-            from sklearn.feature_selection import f_regression
-
-            # Lifted from train API to get the approriate x and y please let me know if this is wrong or there is an easier way
-            copied_dataframe = dataframe.copy()
-            if copied_dataframe is None and self.train_df is None: raise Exception("Can't train when nothing is given.\n")
-            
-            # getting the training df (either from class variable or the input of this method)
-            training_df = self.train_df if (self.train_df is not None) else copied_dataframe
-            training_df, new_col_names = self._get_df_with_interaction_terms(training_df, interacting_terms_list)
-            #\
-
-            # getting the response variables and drop it from the training df
-            train_y = training_df[consts.RESPONSE_NAME]
-            if consts.RESPONSE_NAME in set(training_df.columns):
-                train_X = training_df.drop(consts.RESPONSE_NAME, axis=consts.COL, inplace=False)
-            #\        
-            
-            # first, add the interacting term columns. Then, if this method is called with a feature_col_names then used them 
-            # as additional training_features, else just use all columns as training features 
-            training_features = []
-            training_features.extend(new_col_names)
-            
-            if len(feature_col_names) > 0: training_features.extend(feature_col_names)
-            else: training_features.extend(train_X.columns)
-            train_X = training_df[training_features]
-            #\
-
-            predictors = set(train_X.columns)
-            selected_predictors = []
-            iteration = 1
-
-            while True:
-                if verbose: print(f"Iteration #{iteration}")
-                best_p_value = float('inf')
-                best_predictor = None
-
-                # Foward selection
-                for predictor in predictors:
-                    current_predictors = selected_predictors + [predictor]
-                    current_features = train_X[current_predictors]
-
-                    _, p_values = f_regression(current_features, train_y)
-                    p_value = p_values[-1]  
-
-                    if p_value < best_p_value:
-                        best_p_value = p_value
-                        best_predictor = predictor
-
-                if best_p_value >= significance_level:
-                    if verbose: print("No predictor meets the significance level.")
-                    break
-
-                # add best_predictor
-                selected_predictors.append(best_predictor)
-                predictors.remove(best_predictor)
-                if verbose: print(f"Added predictor: {best_predictor}, P-value: {best_p_value}")
-
-                # Backward Selection
-                removed_predictors = []
-                current_features = train_X[selected_predictors]
-                _, p_values = f_regression(current_features, train_y)
-
-                for i, prev_predictor in enumerate(selected_predictors):
-                    p_value = p_values[i]
-
-                    # mark insigficant variables for removal
-                    if p_value >= significance_level:
-                        removed_predictors.append(prev_predictor)
-
-                for removed_predictor in removed_predictors:
-                    selected_predictors.remove(removed_predictor)
-                    if verbose: print(f"Removing predictor: {prev_predictor} due to insignificance")
-
-                iteration += 1
-
-                if iteration > max_iterations:
-                    if verbose: print("Maximum number of iterations reached.")
-                    break
-
-            return selected_predictors
 
         def _predict(self, test_data: list[pd.DataFrame] | pd.DataFrame, *, 
                     hyperparam_dict: Optional[dict] = None) -> list:
