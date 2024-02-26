@@ -168,6 +168,44 @@ def stepwise_selection(X, y, initial_list=[], threshold_in=0.01, threshold_out =
 
     return included
 
+def hypothesis_test_features(df, feature1: str, feature2: str = "", *, alpha: float = .05):
+    if feature1 not in set(df.columns): return []
+    if feature2 not in set(df.columns): return []
+    
+    response = consts.RESPONSE_NAME
+    
+    X1 = sm.add_constant(df[[feature1]])
+    X2 = sm.add_constant(df[[feature2]])
+    X_both = sm.add_constant(df[[feature1, feature2]])
+    
+    y = df[response]
+
+    # Fit the models
+    model1 = sm.OLS(y, X1).fit()
+    model2 = sm.OLS(y, X2).fit()
+    model_both = sm.OLS(y, X_both).fit()
+
+    # Get the p-values of the coefficients
+    p_value1 = model1.pvalues[feature1]
+    p_value2 = model2.pvalues[feature2]
+    p_value_both1 = model_both.pvalues[feature1]
+    p_value_both2 = model_both.pvalues[feature2]
+
+    # Initialize a list to store the features that have a coefficient not significantly different from zero
+    insignificant_features = []
+
+    # Check the p-values against the significance level
+    if p_value1 > alpha:
+        insignificant_features.append(feature1)
+    if p_value2 > alpha:
+        insignificant_features.append(feature2)
+    if p_value_both1 > alpha and feature1 not in insignificant_features:
+        insignificant_features.append(feature1)
+    if p_value_both2 > alpha and feature2 not in insignificant_features:
+        insignificant_features.append(feature2)
+
+    return insignificant_features
+
 # \Generalized Methods
 
 
@@ -444,6 +482,50 @@ class Data:
                 self.test_dfs[i].loc[:, col_name] = self.saved_column[name + "_test"]
             del self.saved_column[name + "_test"]
         return
+
+    def find_high_corr(self, threshold: float) -> dict:
+        df = self.train_df
+        if consts.RESPONSE_NAME in set(self.train_df.columns): 
+            df = self.train_df.drop(consts.RESPONSE_NAME, axis=consts.COL, inplace=False)
+        
+        corr_matrix = df.corr()
+        high_corr_dict = {}
+
+        for i in range(len(corr_matrix.columns)):
+            for j in range(i+1, len(corr_matrix.columns)):
+                if abs(corr_matrix.iloc[i, j]) >= threshold:
+                    if abs(corr_matrix.iloc[i, j]) not in high_corr_dict:
+                        high_corr_dict[abs(corr_matrix.iloc[i, j])] = [(corr_matrix.columns[i], corr_matrix.columns[j])]
+                    else:
+                        high_corr_dict[abs(corr_matrix.iloc[i, j])].append((corr_matrix.columns[i], corr_matrix.columns[j]))
+
+        return high_corr_dict
+
+    def plot_high_corr(self):
+        df = self.train_df
+        
+        # Define the correlation thresholds
+        thresholds = [i/10 for i in range(1, 10)]
+        
+        # Initialize a dictionary to store the number of high correlations for each threshold
+        num_high_corr = {}
+
+        # Calculate the number of high correlations for each threshold
+        for threshold in thresholds:
+            high_corr_dict = find_high_corr(df, threshold)
+            num_high_corr[threshold] = sum(len(v) for v in high_corr_dict.values())
+
+        # Create a DataFrame from the dictionary
+        df_plot = pd.DataFrame(list(num_high_corr.items()), columns=['Threshold', 'Number of High Correlations'])
+
+        # Plot the data
+        plt.figure(figsize=(10, 6))
+        plt.plot(df_plot['Threshold'], df_plot['Number of High Correlations'], marker='o')
+        plt.title('Number of High Correlations for Different Thresholds')
+        plt.xlabel('Correlation Threshold')
+        plt.ylabel('Number of High Correlations')
+        plt.grid(True)
+        plt.show()
 
     # \APIs
 
