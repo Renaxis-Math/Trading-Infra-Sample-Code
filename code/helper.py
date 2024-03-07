@@ -180,21 +180,17 @@ def hypothesis_test_features(df, feature1: str, feature2: str = "", *, alpha: fl
     
     y = df[response]
 
-    # Fit the models
     model1 = sm.OLS(y, X1).fit()
     model2 = sm.OLS(y, X2).fit()
     model_both = sm.OLS(y, X_both).fit()
 
-    # Get the p-values of the coefficients
     p_value1 = model1.pvalues[feature1]
     p_value2 = model2.pvalues[feature2]
     p_value_both1 = model_both.pvalues[feature1]
     p_value_both2 = model_both.pvalues[feature2]
 
-    # Initialize a list to store the features that have a coefficient not significantly different from zero
     insignificant_features = []
 
-    # Check the p-values against the significance level
     if p_value1 > alpha:
         insignificant_features.append(feature1)
     if p_value2 > alpha:
@@ -512,7 +508,7 @@ class Data:
 
         # Calculate the number of high correlations for each threshold
         for threshold in thresholds:
-            high_corr_dict = find_high_corr(df, threshold)
+            high_corr_dict = self.find_high_corr(threshold)
             num_high_corr[threshold] = sum(len(v) for v in high_corr_dict.values())
 
         # Create a DataFrame from the dictionary
@@ -640,7 +636,8 @@ class Model(Data):
             'XGBOOST': self._xgboost_regression,
             'DecisionTreeClassifier': self._sklearn_tree_classifier,
             'DecisionTreeRegressor': self._sklearn_tree_regressor,
-            'RandomForestClassifier': self._random_forest_classifier
+            'RandomForestClassifier': self._random_forest_classifier,
+            'SVR': self._svr
             }
         
         self.metric = {
@@ -880,6 +877,15 @@ class Model(Data):
             
             return returning_model
             
+        def _svr(self, hyperparam_dict: Optional[dict] = None):
+            from sklearn.svm import SVR
+            returning_model = None
+            
+            if hyperparam_dict is None: returning_model = SVR()
+            else: returning_model = SVR(**hyperparam_dict)
+            
+            return returning_model
+ 
         # \Sk-learn region
         
         def _list_all_types(self) -> None:
