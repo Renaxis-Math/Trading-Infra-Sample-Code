@@ -8,6 +8,7 @@ DATA_FILTER_KEYWORD = "data"
 ROW = 0
 COL = 1
 CV = 10
+ID = 'eqid'
 
 # RYAN
 RAW_DATA_PATH_RYAN = "../../clinicDataCopy/"

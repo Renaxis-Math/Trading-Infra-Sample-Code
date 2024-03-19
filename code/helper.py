@@ -1,10 +1,14 @@
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 import consts
 import importlib
 import os, re, typing
+import statsmodels.api as sm
+import xgboost as xgb
 from typing import Optional
 from datetime import datetime, timedelta
+from collections import defaultdict
 
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -14,32 +18,26 @@ import io, os, pickle
 
 import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
-
-import pandas as pd
-from googleapiclient.discovery import build
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
-from googleapiclient.http import MediaIoBaseDownload
-import io, os, pickle
-
-import ssl
-ssl._create_default_https_context = ssl._create_unverified_context
-
-def get_beta_standard_errors(residuals: list[float], *, sample_size: int, beta_count: int) -> dict:
-    residual_sum_of_squares = residuals.T @ residuals 
-    sigma_squared_hat = residual_sum_of_squares[0, 0] / (sample_size - beta_count) 
-    var_beta_hat = np.linalg.inv(X_with_intercept.T @ X_with_intercept) * sigma_squared_hat 
-    
-    betaIndex_SE_map = {}
-    for i in range(beta_count): 
-        standard_error = var_beta_hat[i, i] ** 0.5 
-        betaIndex_SE_map[i] = standard_error
-    
-    return betaIndex_SE_map
 
 # Generalized Methods
+def get_variances(df):
+    if consts.RESPONSE_NAME in df.columns: 
+        used_df = df.drop(consts.RESPONSE_NAME, inplace = False, axis = consts.COL)
+    else: used_df = df
+    
+    variances = used_df.var()
+    return variances
 
-def downloaded_all_data(output_dir: str):
+def get_correlations(df):
+    if consts.RESPONSE_NAME in df.columns: 
+        used_df = df.drop(consts.RESPONSE_NAME, inplace = False, axis = consts.COL)
+    else: used_df = df
+    
+    corr_mat = np.array(used_df.corr())    
+    correlations = np.array([corr_mat[r][c] for r in range(len(corr_mat)) for c in range(r)])
+    return correlations[~np.isnan(correlations)]
+
+def downloaded_all_data(output_dir: str, file_count: int) -> None:
     if "Credentials stuff":
         creds = None
         if os.path.exists('token.pickle'):
@@ -57,16 +55,15 @@ def downloaded_all_data(output_dir: str):
 
     if "Access":
         service = build('drive', 'v3', credentials=creds)
-        results = service.files().list(
-            q="'{}' in parents".format(consts.FOLDER_ID), pageSize=10, 
-                                        fields="nextPageToken, files(id, name)").execute()
+        results = service.files().list(q="'{}' in parents".format(consts.FOLDER_ID), 
+                                       pageSize=file_count, 
+                                       fields="nextPageToken, files(id, name)").execute()
         items = results.get('files', [])
 
     if not items: print('No files found.')
     else:
         print("==> Downloading data from Google Drive...")
         for item in items:
-            print(u'{0} ({1})'.format(item['name'], item['id']))
             request = service.files().get_media(fileId=item['id'])
             if not os.path.exists(output_dir): os.mkdir(output_dir)
             
@@ -75,7 +72,6 @@ def downloaded_all_data(output_dir: str):
             done = False
             while done is False:
                 status, done = downloader.next_chunk()
-                print("Download %d%%." % int(status.progress() * 100))
     
     print(f"Finish downloading {len(items)} files to ./{output_dir}")
     return
@@ -126,7 +122,226 @@ def reverse_binary_search(sorted_items: list, target, elimination_func):
         else: left_i = mid_i
         
     return right_i
+
+def extract_features_to_file(final_features: list[str], filepath: str):
+    with open(filepath, 'w') as file:
+        for i, feature in enumerate(final_features):
+            if i < len(final_features) - 1: feature = feature + '\n'
+            file.write(feature)
+    file.close()
+
+def stepwise_selection(X, y, initial_list=[], threshold_in=0.01, threshold_out = 0.05, verbose=True):
+    included = list(initial_list)
+
+    def step(direction):
+        nonlocal included
+        changed = False
+        if direction == 'forward':
+            excluded = list(set(X.columns) - set(included))
+            new_pval = pd.Series(index=excluded)
+            for new_column in excluded:
+                model = sm.OLS(y, sm.add_constant(pd.DataFrame(X[included + [new_column]]))).fit()
+                new_pval[new_column] = model.pvalues[new_column]
+            best_pval = new_pval.min()
+            if best_pval < threshold_in:
+                best_feature = new_pval.idxmin()
+                included.append(best_feature)
+                changed = True
+                if verbose:
+                    print('Add {:30} with p-value {:.6}'.format(best_feature, best_pval))
+        elif direction == 'backward':
+            model = sm.OLS(y, sm.add_constant(pd.DataFrame(X[included]))).fit()
+            pvalues = model.pvalues.iloc[1:]
+            worst_pval = pvalues.max()
+            if worst_pval > threshold_out:
+                worst_feature = pvalues.idxmax()
+                included.remove(worst_feature)
+                changed = True
+                if verbose:
+                    print('Drop {:30} with p-value {:.6}'.format(worst_feature, worst_pval))
+        return changed
+
+    while True:
+        changed = step('forward') or step('backward')
+        if not changed:
+            break
+
+    return included
+
+def hypothesis_test_features(df, feature1: str, feature2: str = "", *, alpha: float = .05):
+    if feature1 not in set(df.columns): return []
+    if feature2 not in set(df.columns): return []
+    
+    response = consts.RESPONSE_NAME
+    
+    X1 = sm.add_constant(df[[feature1]])
+    X2 = sm.add_constant(df[[feature2]])
+    X_both = sm.add_constant(df[[feature1, feature2]])
+    
+    y = df[response]
+
+    # Fit the models
+    model1 = sm.OLS(y, X1).fit()
+    model2 = sm.OLS(y, X2).fit()
+    model_both = sm.OLS(y, X_both).fit()
+
+    # Get the p-values of the coefficients
+    p_value1 = model1.pvalues[feature1]
+    p_value2 = model2.pvalues[feature2]
+    p_value_both1 = model_both.pvalues[feature1]
+    p_value_both2 = model_both.pvalues[feature2]
+
+    # Initialize a list to store the features that have a coefficient not significantly different from zero
+    insignificant_features = []
+
+    # Check the p-values against the significance level
+    if p_value1 > alpha:
+        insignificant_features.append(feature1)
+    if p_value2 > alpha:
+        insignificant_features.append(feature2)
+    if p_value_both1 > alpha and feature1 not in insignificant_features:
+        insignificant_features.append(feature1)
+    if p_value_both2 > alpha and feature2 not in insignificant_features:
+        insignificant_features.append(feature2)
+
+    return insignificant_features
+
 # \Generalized Methods
+
+
+# Plot Methods
+
+def scatter_lot(df: pd.DataFrame, col: str, rows_count: int = -1):
+    plt.scatter(df.index[:rows_count], df[col][:rows_count])
+    plt.axhline(0, color='r', linestyle='-')
+    plt.title(f'Scatter Plot of {col}')
+    plt.xlabel('Observation Count')
+    plt.ylabel('Value')
+    plt.show()
+    
+def histogram(data: list, num_bins = 30):    
+    plt.hist(data, bins = num_bins, edgecolor='black')
+    plt.title('Distribution of Correlation Coefficients')
+    plt.xlabel('Correlation Coefficient')
+    plt.ylabel('Frequency')
+    plt.show()
+
+def boxplot(data: list, x_axis_label: str):
+    # Create a new figure with a specified size (width, height)
+    plt.figure(figsize=(10, 6))
+
+    plt.boxplot(data, vert=False)
+    plt.title(f'Boxplot of {x_axis_label}')
+    plt.xlabel(f'{x_axis_label}')
+    plt.show()
+
+def classification_validation_plot(data: 'Data', transform_func, 
+                                   model: 'Model', n_splits: int, 
+                                    test_start_yyyymmdd: str, backward_dayCount: int = 1, 
+                                    train_data_count: int = 1, years_count: int = 0, 
+                                    data_path: str = "", forward_dayCount: int = 0,
+                                    features: list[str] = []):
+    
+    from sklearn.model_selection import TimeSeriesSplit
+    import random
+
+    data.update_and_get_train_df(test_start_yyyymmdd, 
+                                      backward_dayCount=backward_dayCount, 
+                                      train_data_count=train_data_count, 
+                                      years_count=years_count)
+
+    data.update_and_get_test_df(data_path=data_path, 
+                                start_date=test_start_yyyymmdd, 
+                                forward_dayCount=forward_dayCount)
+
+    data.transform_col("classification", col_name = consts.RESPONSE_NAME, transform_func = transform_func)
+    df = data.train_df
+    test_dfs = data.test_dfs
+
+    tscv = TimeSeriesSplit(n_splits=n_splits)
+
+    metrics = {key: [] for key in model.metric.keys()}
+    test_metrics = {key: [] for key in model.metric.keys()}
+
+    for train_index, val_index in tscv.split(df):
+        train_df, val_df = df.iloc[train_index], df.iloc[val_index]
+        model.train(train_df, verbose = False, feature_col_names = features)
+
+        model.test(val_df, verbose = False)
+        for metric in metrics.keys():
+            metrics[metric].append(model.metric_output[metric])
+
+        test_df = random.choice(test_dfs)
+        model.test(test_df, verbose = False)
+        for metric in test_metrics.keys():
+            test_metrics[metric].append(model.metric_output[metric])
+
+    for metric in model.metric.keys():
+        plt.figure(figsize=(10, 6))
+        plt.plot(metrics[metric], \
+                 label=f'Validation')
+        plt.plot(test_metrics[metric], label='Test')
+        
+        plt.title(f'{metric} over time of {model.model_type} model with {len(features)} features')
+        
+        plt.xlabel('Time')
+        plt.ylabel(metric)
+
+        plt.legend()
+        plt.show()
+    
+def validation_plot(data: 'Data', model: 'Model', n_splits: int, 
+                    test_start_yyyymmdd: str, backward_dayCount: int = 1, 
+                    train_data_count: int = 1, years_count: int = 0, 
+                    data_path: str = "", forward_dayCount: int = 0,
+                    features: list[str] = []):
+    
+    from sklearn.model_selection import TimeSeriesSplit
+    import random
+
+    df = data.update_and_get_train_df(test_start_yyyymmdd, 
+                                      backward_dayCount=backward_dayCount, 
+                                      train_data_count=train_data_count, 
+                                      years_count=years_count)
+
+    test_dfs = data.update_and_get_test_df(data_path=data_path, 
+                                           start_date=test_start_yyyymmdd, 
+                                           forward_dayCount=forward_dayCount)
+
+    tscv = TimeSeriesSplit(n_splits=n_splits)
+
+    metrics = {key: [] for key in model.metric.keys()}
+    test_metrics = {key: [] for key in model.metric.keys()}
+
+    for train_index, val_index in tscv.split(df):
+        train_df, val_df = df.iloc[train_index], df.iloc[val_index]
+        model.train(train_df, verbose = False, feature_col_names = features)
+
+        model.test(val_df, verbose = False)
+        for metric in metrics.keys():
+            metrics[metric].append(model.metric_output[metric])
+
+        test_df = random.choice(test_dfs)
+        model.test(test_df, verbose = False)
+        for metric in test_metrics.keys():
+            test_metrics[metric].append(model.metric_output[metric])
+
+    for metric in model.metric.keys():
+        plt.figure(figsize=(10, 6))
+        plt.plot(metrics[metric], \
+                 label=f'Validation')
+        plt.plot(test_metrics[metric], label='Test')
+        
+        plt.title(f'{metric} over time of {model.model_type} model with {len(features)} features')
+        
+        plt.xlabel('Time')
+        plt.ylabel(metric)
+
+        plt.legend()
+        plt.show()
+
+#\ Plot Methods
+
 
 """Data Class works with 1 training data and N testing data from a given directory.
 """
@@ -144,8 +359,11 @@ class Data:
 
         self.sorted_file_names = self._init_sorted_file_names(self.data_path)
         self.sorted_file_datetimes = self._init_sorted_file_datetimes()
+        
         self.train_df = train_data
         self.test_dfs = test_data
+        
+        self.saved_column = defaultdict(list)
         return
     
     @property
@@ -156,10 +374,20 @@ class Data:
         if train_data_path is not None:
             if len(train_data_path) == 0: train_data_path = "./"
             if train_data_path[-1] != "/": train_data_path += "/"
-        else:
-            train_data_path = "./data"
-            downloaded_all_data(train_data_path);           
+        
         self._data_path = train_data_path
+        return
+    
+    @property
+    def test_dfs(self) -> list[pd.DataFrame]:
+        return self._test_dfs
+    @test_dfs.setter
+    def test_dfs(self, test_data) -> None:
+        if not isinstance(test_data, list): test_data = [test_data]
+
+        for i, data in enumerate(test_data):
+            test_data[i] = self._removed_id(data, consts.ID)
+        self._test_dfs = test_data
         return
     
     # APIs
@@ -191,7 +419,9 @@ class Data:
         train_start_date = train_end_date - timedelta(days = consts.YEAR_DAY * years_count + train_data_count)
         
         filtered_file_names = self._filter_file_names(start_date = train_start_date, end_date = train_end_date)
-        dfs = [pd.read_csv(self.data_path + file_name) for file_name in filtered_file_names]
+        dfs = [self._removed_id(self._filtered_duplicatations(
+                                pd.read_csv(self.data_path + file_name), 
+                                consts.ROW), consts.ID) for file_name in filtered_file_names]
         if len(dfs) > 0: train_df = pd.concat(dfs, axis = consts.ROW)
         else:
             train_df = pd.DataFrame()
@@ -222,15 +452,94 @@ class Data:
         if end_date == "":
             if isinstance(start_date, str): start_date = datetime.strptime(start_date, r'%Y%m%d')
             end_date = start_date + timedelta(days=forward_dayCount)
+
         filtered_file_names = self._filter_file_names(start_date = start_date, end_date = end_date)
+        
         dfs = [pd.read_csv(data_path + file_name) for file_name in filtered_file_names]
         
         self.test_dfs = dfs
         return dfs
 
+    def transform_col(self, name: str, *, col_name: str, transform_func: 'Function') -> None:
+        if self.train_df is not None:
+            self.saved_column[name + "_train"] = pd.Series(self.train_df[col_name])
+            self.train_df.loc[:, col_name] = self.train_df[col_name].apply(transform_func)
+            
+        if len(self.test_dfs) > 0:
+            for i in range(len(self.test_dfs)):
+                self.saved_column[name + "_test"].append(pd.Series(self.test_dfs[i][col_name]))
+                self.test_dfs[i].loc[:, col_name] = self.test_dfs[i][col_name].apply(transform_func)
+    
+        return
+    
+    def reverse_transform_col(self, name: str, *, col_name: str) -> None:
+        if (self.train_df is not None) and (name + "_train" in self.saved_column):
+            self.train_df.loc[:, col_name] = self.saved_column[name + "_train"]
+            del self.saved_column[name + "_train"]
+            
+        if (len(self.test_dfs) > 0) and (name + "_test" in self.saved_column):
+            for i in range(len(self.test_dfs)):
+                self.test_dfs[i].loc[:, col_name] = self.saved_column[name + "_test"]
+            del self.saved_column[name + "_test"]
+        return
+
+    def find_high_corr(self, threshold: float) -> dict:
+        df = self.train_df
+        if consts.RESPONSE_NAME in set(self.train_df.columns): 
+            df = self.train_df.drop(consts.RESPONSE_NAME, axis=consts.COL, inplace=False)
+        
+        corr_matrix = df.corr()
+        high_corr_dict = {}
+
+        for i in range(len(corr_matrix.columns)):
+            for j in range(i+1, len(corr_matrix.columns)):
+                if abs(corr_matrix.iloc[i, j]) >= threshold:
+                    if abs(corr_matrix.iloc[i, j]) not in high_corr_dict:
+                        high_corr_dict[abs(corr_matrix.iloc[i, j])] = [(corr_matrix.columns[i], corr_matrix.columns[j])]
+                    else:
+                        high_corr_dict[abs(corr_matrix.iloc[i, j])].append((corr_matrix.columns[i], corr_matrix.columns[j]))
+
+        return high_corr_dict
+
+    def plot_high_corr(self):
+        df = self.train_df
+        
+        # Define the correlation thresholds
+        thresholds = [i/10 for i in range(1, 10)]
+        
+        # Initialize a dictionary to store the number of high correlations for each threshold
+        num_high_corr = {}
+
+        # Calculate the number of high correlations for each threshold
+        for threshold in thresholds:
+            high_corr_dict = find_high_corr(df, threshold)
+            num_high_corr[threshold] = sum(len(v) for v in high_corr_dict.values())
+
+        # Create a DataFrame from the dictionary
+        df_plot = pd.DataFrame(list(num_high_corr.items()), columns=['Threshold', 'Number of High Correlations'])
+
+        # Plot the data
+        plt.figure(figsize=(10, 6))
+        plt.plot(df_plot['Threshold'], df_plot['Number of High Correlations'], marker='o')
+        plt.title('Number of High Correlations for Different Thresholds')
+        plt.xlabel('Correlation Threshold')
+        plt.ylabel('Number of High Correlations')
+        plt.grid(True)
+        plt.show()
+
     # \APIs
 
     # Helper Functions
+    
+    def _filtered_duplicatations(self, df, axis: int) -> 'DataFrame':
+        use_df = df if axis == 0 else df.T
+        answer_df = use_df.drop_duplicates()
+        return answer_df if axis == 0 else answer_df.T
+    
+    def _removed_id(self, df: 'DataFrame', id_colname: str) -> None:
+        if id_colname not in df.columns: return
+        return df.drop(id_colname, inplace=False, axis = consts.COL)
+    
     def _init_sorted_file_names(self, data_path: Optional[str]) -> list[str]:
         import os
         if data_path is None: return []
@@ -330,6 +639,7 @@ class Model(Data):
             'LASSO': self._sklearn_LASSO_regression,
             'XGBOOST': self._xgboost_regression,
             'DecisionTreeClassifier': self._sklearn_tree_classifier,
+            'DecisionTreeRegressor': self._sklearn_tree_regressor,
             'RandomForestClassifier': self._random_forest_classifier
             }
         
@@ -352,7 +662,6 @@ class Model(Data):
         # if the type is valid, call the regression function with the hyperparam_dict which return a model
         self.model_type = model_type
         if self.model_type is None:
-            print("WARNING: Please specify 'train_data_path' if you want your model to be saved!")
             print("Model reseted. You must put in a DataFrame for each train/test.")
             self._list_all_types(); return
 
@@ -377,7 +686,7 @@ class Model(Data):
             return
 
     if "APIs":
-        def train(self, dataframe: Optional[pd.DataFrame] = None, *,
+        def train(self, dataframe: Optional[pd.DataFrame] = None, *, verbose = True,
                         feature_col_names: list[str] = [],
                         interacting_terms_list: list[list[str]] = [],
                         hyperparam_dict: Optional[dict] = None) -> None:
@@ -427,10 +736,10 @@ class Model(Data):
             self.feature_col_names = training_features
             #\
             
-            print(f"Features being used: {self.feature_col_names}")
+            if verbose: print(f"No. features being used: {len(self.feature_col_names)}")
             return
         
-        def test(self, test_data: Optional[list[pd.DataFrame] | pd.DataFrame] = None, *, 
+        def test(self, test_data: Optional[list[pd.DataFrame] | pd.DataFrame] = None, *, verbose = True,
                         hyperparam_dict: Optional[dict] = None) -> None:
             """
             Get metrics for the regression model using existing test data.
@@ -460,10 +769,10 @@ class Model(Data):
             if isinstance(test_data, pd.DataFrame):
                 input_df = test_data.copy()
                 test_y = test_data[consts.RESPONSE_NAME].values
-                test_X = _get_test_X(test_data.copy())
-                
+                test_X = _get_test_X(input_df)
+
                 self.actual_y_list = [test_y]
-                self.predicted_y_list = self._predict(input_df, hyperparam_dict = hyperparam_dict)
+                self.predicted_y_list = self._predict(test_X, hyperparam_dict = hyperparam_dict)
             else:
                 input_dfs = [dataframe.copy() for dataframe in test_data]
                 actual_y_list = [input_df[consts.RESPONSE_NAME].values for input_df in input_dfs]
@@ -477,24 +786,34 @@ class Model(Data):
             assert len(self.predicted_y_list) == len(self.actual_y_list), \
             print(f"len(predicted_y_list) != len(actual_y_list)\n")
             
+            self._reset_metric_output()
             predict_actual_pairs = list(zip(self.predicted_y_list, self.actual_y_list))
-            self._print_metrics(predict_actual_pairs)
+            self._update_metric_output(predict_actual_pairs, verbose)
             return
         
-        # NOTE: the function must take in tuple of list (predicted_y: list, actual_y: list)
         def add_metric(self, name: str, function: 'Function(predicted_y, actual_y)') -> None:
             """Add a new metric to self.metric
 
             Args:
                 name (str): _description_
-                function (Function): the function must take in tuple of list (predicted_y: list, actual_y: list)
+                function (Function): NOTE: the function must take in tuple of list 
+                (predicted_y: list, actual_y: list)
             """
             assert name not in self.metric, print(f"{name} existed in metric")
-            self.metric[name] = function
+            self.metric[name] = function; self.metric_output[name] = None
             return
         
-        def change_metric_name(self, *, old_name: str, new_name: str) -> None:
-            if new_name in self.metric: self.metric[new_name] = self.metric[old_name]; del self.metric[old_name]
+        def remove_metric(self, name: str = "") -> None:
+            if name == "":
+                all_names = list(self.metric.keys())
+                for name in all_names:
+                    assert name in self.metric_output
+                    del self.metric[name]; del self.metric_output[name]
+            else:
+                if name not in self.metric: return
+                if name not in self.metric_output: return
+                del self.metric[name]; del self.metric_output[name]
+
             return
    
         def print_model(self):
@@ -513,6 +832,15 @@ class Model(Data):
             returning_model = None
             if hyperparam_dict is None: returning_model = DecisionTreeClassifier()
             else: returning_model = DecisionTreeClassifier(**hyperparam_dict)
+            
+            return returning_model
+        
+        def _sklearn_tree_regressor(self, hyperparam_dict: Optional[dict] = None):
+            from sklearn.ensemble import RandomForestRegressor
+                        
+            returning_model = None
+            if hyperparam_dict is None: returning_model = RandomForestRegressor()
+            else: returning_model = RandomForestRegressor(**hyperparam_dict)
             
             return returning_model
         
@@ -632,7 +960,11 @@ class Model(Data):
         
             return predicted_y_list
         
-        def _print_metrics(self, predict_actual_pairs: list[list]) -> None:
+        def _reset_metric_output(self):
+            for metric_name in self.metric_output.keys():
+                self.metric_output[metric_name] = None
+        
+        def _update_metric_output(self, predict_actual_pairs: list[list], verbose = True):
             for metric_name, metric_function in self.metric.items():
                 metric_outputs = []
                 
@@ -640,8 +972,13 @@ class Model(Data):
                     metric_outputs.append(metric_function(*predict_actual_pair))
                 
                 self.metric_output[metric_name] = np.mean(metric_outputs)
+            
+            if verbose: self._print_metrics(predict_actual_pairs)
+            return
+        
+        def _print_metrics(self, predict_actual_pairs: list[list]) -> None:
+            for metric_name, metric_function in self.metric.items():
                 print(f"{metric_name}: {self.metric_output[metric_name]}")
-
             return  
         
         """TODO: Step 2
