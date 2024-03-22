@@ -9,11 +9,13 @@ import xgboost as xgb
 from typing import Optional
 from datetime import datetime, timedelta
 from collections import defaultdict
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
 
-from googleapiclient.discovery import build
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
-from googleapiclient.http import MediaIoBaseDownload
+# from googleapiclient.discovery import build
+# from google_auth_oauthlib.flow import InstalledAppFlow
+# from google.auth.transport.requests import Request
+# from googleapiclient.http import MediaIoBaseDownload
 import io, os, pickle
 
 import ssl
@@ -339,6 +341,29 @@ def validation_plot(data: 'Data', model: 'Model', n_splits: int,
 
         plt.legend()
         plt.show()
+
+
+def pca_plot(df:pd.DataFrame, num_components:int = 25):
+    scaler = StandardScaler()
+    train_X_standardized = scaler.fit_transform(df)
+
+    # Step 2: Fit PCA on the standardized training data
+    pca = PCA(n_components=num_components)
+    pca.fit(train_X_standardized)
+
+    # Step 3: Transform the standardized training data using the fitted PCA
+    # train_X_pca = pca.transform(train_X_standardized)
+    # train_X = pd.DataFrame(train_X_pca, columns=[f'PCA_{i}' for i in range(train_X_pca.shape[1])])
+
+    # Plot explained variance ratio
+    cumulative_variance_ratio = np.cumsum(pca.explained_variance_ratio_)
+    plt.plot(cumulative_variance_ratio, marker='o', color='midnightblue')
+    plt.plot([0,num_components-1], [0, num_components/len(df.columns)])
+    plt.xlabel('Number of Principal Components')
+    plt.ylabel('Cumulative Explained Variance Ratio')
+    plt.title('Cumulative Explained Variance Ratio by Principal Components')
+    plt.show()
+
 
 #\ Plot Methods
 
