@@ -818,8 +818,9 @@ class Model(Data):
             print(f"Your model's DEFAULT init hyperparams are: {self.name_model_map[self.model_type]().get_params()}")
             
     if "Helper Functions":
-        # Sk-learn region
-        """TODO: Step 1
+        # Sklearn region
+        """TODO: Step 1 # "todo" here does not mean "need work", 
+        it meant to be a guide if you want to add a new sklearn function.
         
         Add another function if you want to expand class usage.
         """
@@ -886,7 +887,7 @@ class Model(Data):
             
             return returning_model
  
-        # \Sk-learn region
+        # \Sklearn region
         
         def _list_all_types(self) -> None:
             print(f"Available Regression Inputs: {self.name_model_map.keys()}\n")
