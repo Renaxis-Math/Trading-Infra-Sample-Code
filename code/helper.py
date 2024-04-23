@@ -1,3 +1,4 @@
+import sklearn
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -6,19 +7,18 @@ import importlib
 import os, re, typing
 import statsmodels.api as sm
 import xgboost as xgb
+import json
+import io, os, pickle
+import ssl
+import random
+
 from typing import Optional
 from datetime import datetime, timedelta
 from collections import defaultdict
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 
-# from googleapiclient.discovery import build
-# from google_auth_oauthlib.flow import InstalledAppFlow
-# from google.auth.transport.requests import Request
-# from googleapiclient.http import MediaIoBaseDownload
-import io, os, pickle
-
-import ssl
+# This line helps us fetch data from Drive without permission issues.
 ssl._create_default_https_context = ssl._create_unverified_context
 
 # Generalized Methods
@@ -204,11 +204,146 @@ def hypothesis_test_features(df, feature1: str, feature2: str = "", *, alpha: fl
 
     return insignificant_features
 
+def LASSO_feature_selection(train_df: 'DataFrame', test_df: 'DataFrame', 
+                            features: list[str] = None):
+    df = train_df.copy()
+    temp_model = Model('LASSO')
+    
+    if features == None: temp_model.train(df)
+    else: temp_model.train(df, feature_col_names = features)
+    temp_model.test(test_df)
+
+    coefficients = temp_model.inner.coef_
+    mask = np.not_equal(coefficients, 0)
+
+    filtered_features = list(np.array(temp_model.feature_col_names)[mask])
+    return filtered_features
+
+def export_hyperparams(hyperparam_map: dict, filename: str):
+    with open(filename, 'w') as file:
+        if ".json" not in filename: filename += ".json"
+        json.dump(hyperparam_map, file)
+
+def genetic_algorithm(train_df, test_df, filtered_features = None):
+    def initialize_population():
+        population = np.random.randint(2, size=(20, len(train_df.columns)-1))  # -1 to exclude response variable
+        features = train_df.drop(columns=[consts.RESPONSE_NAME]).columns.tolist()
+        return population, features
+
+    def calculate_cost(features, chromosome):
+        feature_selected = [features[i] for i in range(len(features)) if chromosome[i] == 1]
+        
+        x_train = train_df[feature_selected].values
+        x_test = test_df[feature_selected].values
+        
+        filename = "Hoang_hyperparams"
+        with open(filename, 'r') as file: hyperparam_dict = json.load(file)
+        kwarg = {"random_state": 0,
+                "booster": "gbtree",
+                "reg_lambda": hyperparam_dict["ccp_alpha"],
+                "max_depth": hyperparam_dict["max_depth"],
+                "max_leaves": hyperparam_dict["max_leaf_nodes"],
+                "random_state": hyperparam_dict["random_state"],
+                "eval_metric": sklearn.metrics.mean_absolute_error,
+                "learning_rate": 0.01, # because hyperparam_dict["ccp_alpha"] has 2 decimals
+                }
+        
+        from xgboost import XGBRegressor
+        model = XGBRegressor(**kwarg)
+        model.fit(x_train, train_df[consts.RESPONSE_NAME])
+        
+        # Predictions
+        y_pred = model.predict(x_test)
+        
+        # Compute correlation coefficient
+        correlation = np.corrcoef(y_pred, test_df[consts.RESPONSE_NAME])[0, 1]
+        
+        return correlation
+    
+    def random_combine(parents, n_offspring):
+        offspring = []
+        n_parents = parents.shape[0]
+        for _ in range(n_offspring):
+            random_dad = parents[np.random.randint(low=0, high=n_parents - 1)]
+            random_mom = parents[np.random.randint(low=0, high=n_parents - 1)]
+            dad_mask = np.random.randint(0, 2, random_dad.shape)
+            mom_mask = np.logical_not(dad_mask)
+            child = np.add(np.multiply(random_dad, dad_mask), np.multiply(random_mom, mom_mask))
+            offspring.append(child)
+        return np.array(offspring)
+
+    def mutate_parent(parent, n_mutations):
+        size1 = parent.shape[0]
+        for _ in range(n_mutations):
+            rand1 = np.random.randint(0, size1)
+            parent[rand1] = 1 - parent[rand1]  # Flipping the bit
+        return parent
+
+    def mutate_gen(parent_gen, n_mutations):
+        mutated_parent_gen = []
+        for parent in parent_gen:
+            mutated_parent_gen.append(mutate_parent(parent, n_mutations))
+        return np.array(mutated_parent_gen)
+    
+    def decorrelate_signals(signals):
+        # Convert signals to floating-point arrays
+        signals = [signal.astype(float) for signal in signals]
+        
+        signal_correlation_matrix = np.corrcoef(np.array(signals))
+        n_signals = len(signals)
+        
+        # Penalize signals that are highly correlated with each other
+        for i in range(n_signals):
+            for j in range(i + 1, n_signals):
+                # Penalize correlation between signals
+                correlation_penalty = 0.1  # Adjust this penalty factor as needed
+                signals[i] -= correlation_penalty * signal_correlation_matrix[i, j] * signals[j]
+                signals[j] -= correlation_penalty * signal_correlation_matrix[j, i] * signals[i]
+        
+        return signals
+
+    def select_best(features, parent_gen):
+        costs = np.array([calculate_cost(features, chromosome) for chromosome in parent_gen])
+        selected_parent = parent_gen[costs > 0.4]
+        
+        # Decorrelate the selected signals
+        selected_parent = decorrelate_signals(selected_parent)
+        
+        max_index = np.where(costs == np.amax(costs))
+        feasible_features = parent_gen[max_index][0]
+        
+        return selected_parent, costs, feasible_features
+
+    if filtered_features is not None: train_df = train_df[filtered_features + [consts.RESPONSE_NAME]]
+    parent_gen, features = initialize_population()
+    generations = 50
+    overall_costs = []
+    overall_features = []
+
+    for i in range(generations):
+        parent_gen, costs, feasible_features = select_best(features, parent_gen)
+        parent_gen = decorrelate_signals(parent_gen)
+        
+        overall_costs.append(np.amax(costs))
+        overall_features.append(feasible_features)
+
+        if np.amax(costs) >= 0.6:
+            return feasible_features
+
+        if parent_gen.shape[0] <= 1:
+            parent_gen, features = initialize_population()
+        else:
+            parent_gen = random_combine(parent_gen, 20)
+        parent_gen = mutate_gen(parent_gen, 2)
+
+    overall_costs = np.array(overall_costs)
+    overall_features = np.array(overall_features)
+    max_index = np.where(overall_costs == np.amax(overall_costs))
+    return overall_features[max_index][0]
+
 # \Generalized Methods
 
-
 # Plot Methods
-
 def scatter_lot(df: pd.DataFrame, col: str, rows_count: int = -1):
     plt.scatter(df.index[:rows_count], df[col][:rows_count])
     plt.axhline(0, color='r', linestyle='-')
@@ -292,7 +427,8 @@ def validation_plot(data: 'Data', model: 'Model', n_splits: int,
                     test_start_yyyymmdd: str, backward_dayCount: int = 1, 
                     train_data_count: int = 1, years_count: int = 0, 
                     data_path: str = "", forward_dayCount: int = 0,
-                    features: list[str] = []):
+                    features: list[str] = [], 
+                    *, color = 'grey'):
     
     from sklearn.model_selection import TimeSeriesSplit
     import random
@@ -326,18 +462,23 @@ def validation_plot(data: 'Data', model: 'Model', n_splits: int,
 
     for metric in model.metric.keys():
         plt.figure(figsize=(10, 6))
-        plt.plot(metrics[metric], \
-                 label=f'Validation')
+        plt.plot(metrics[metric], label=f'Validation')
         plt.plot(test_metrics[metric], label='Test')
         
-        plt.title(f'{metric} over time of {model.model_type} model with {len(features)} features')
-        
+        if metric == 'mean_return': 
+            plt.fill_between(range(len(metrics[metric])), metrics[metric], test_metrics[metric], color=color, alpha=0.3)
+
+        if len(features) == 0: # first-time run, model not saved yet.
+            plt.title(f'{metric} over time of {model.model_type} model with all features')
+        else: 
+            plt.title(f'{metric} over time of {model.model_type} model with {len(features)} features')
+
         plt.xlabel('Time')
         plt.ylabel(metric)
 
         plt.legend()
+        plt.savefig(f"./plots/{metric}-{model.model_type}-{len(features)}")
         plt.show()
-
 
 def pca_plot(df:pd.DataFrame, num_components:int = 25):
     scaler = StandardScaler()
@@ -359,10 +500,7 @@ def pca_plot(df:pd.DataFrame, num_components:int = 25):
     plt.ylabel('Cumulative Explained Variance Ratio')
     plt.title('Cumulative Explained Variance Ratio by Principal Components')
     plt.show()
-
-
 #\ Plot Methods
-
 
 """Data Class works with 1 training data and N testing data from a given directory.
 """
@@ -384,7 +522,10 @@ class Data:
         self.train_df = train_data
         self.test_dfs = test_data
         
+        if self.train_df is not None: self.train_df[consts.RESPONSE_NAME]
+    
         self.saved_column = defaultdict(list)
+        
         return
     
     @property
@@ -398,7 +539,7 @@ class Data:
         
         self._data_path = train_data_path
         return
-    
+        
     @property
     def test_dfs(self) -> list[pd.DataFrame]:
         return self._test_dfs
@@ -449,7 +590,7 @@ class Data:
             print(f"File w/ end date {train_end_date} does not exist.")
             print(f"Please update 'backward_dayCount' or increase 'train_data_count' (currently {train_data_count}).")
         
-        self.train_df = train_df
+        self.train_df = train_df; self.detach_highly_correlated_features()
         return train_df if concat else dfs
 
     def update_and_get_test_df(self, *,
@@ -522,32 +663,40 @@ class Data:
 
         return high_corr_dict
 
-    def plot_high_corr(self):
+    def plot_high_corr(self, name: str):
         df = self.train_df
-        
-        # Define the correlation thresholds
-        thresholds = [i/10 for i in range(1, 10)]
-        
-        # Initialize a dictionary to store the number of high correlations for each threshold
-        num_high_corr = {}
+        num_high_corr = {}; thresholds = [i/10 for i in range(1, 10)]
 
-        # Calculate the number of high correlations for each threshold
+        # Collect the number of high correlations for each threshold to 'num_high_corr'
         for threshold in thresholds:
             high_corr_dict = self.find_high_corr(threshold)
             num_high_corr[threshold] = sum(len(v) for v in high_corr_dict.values())
 
-        # Create a DataFrame from the dictionary
-        df_plot = pd.DataFrame(list(num_high_corr.items()), columns=['Threshold', 'Number of High Correlations'])
+        df_plot = pd.DataFrame(list(num_high_corr.items()), 
+                               columns=['Threshold', 'Number of High Correlations'])
 
-        # Plot the data
         plt.figure(figsize=(10, 6))
         plt.plot(df_plot['Threshold'], df_plot['Number of High Correlations'], marker='o')
         plt.title('Number of High Correlations for Different Thresholds')
         plt.xlabel('Correlation Threshold')
         plt.ylabel('Number of High Correlations')
         plt.grid(True)
+        
+        plt.savefig(f'./plots/{name}.png')
         plt.show()
 
+    def detach_highly_correlated_features(self, threshold: float = .8) -> None:
+        removable_features = []
+
+        highCorr_features_map = self.find_high_corr(threshold)
+
+        for _, highCorr_pairs in highCorr_features_map.items():
+            for (feature1, feature2) in highCorr_pairs:
+                insig_features = hypothesis_test_features(self.train_df, feature1, feature2, alpha = .01)
+                removable_features.extend(insig_features)
+        
+        self.train_df.drop(removable_features, axis = consts.COL, inplace=False)
+        return
     # \APIs
 
     # Helper Functions
@@ -623,7 +772,6 @@ class Data:
         if isinstance(end_date, str): end_date = datetime.strptime(end_date, r'%Y%m%d')
         print(f"Getting files from {start_date} to {end_date}, inclusive.")
         
-        
         leftBound_i = binary_search(self.sorted_file_datetimes, start_date, 
                                     self._is_leftDate_smallerThan_rightDate)
         rightBound_i = reverse_binary_search(self.sorted_file_datetimes, end_date, 
@@ -633,12 +781,8 @@ class Data:
             print(f"Filtered File Dates: []")
             return []
         
-        # Debugging
-        print(f"Filtered File Dates: {self.sorted_file_names[leftBound_i : rightBound_i + 1]}\n")
-        #\ Debugging
         return self.sorted_file_names[leftBound_i : rightBound_i + 1]
     # \Helper Functions    
-
 
 """Model Class works with 1 training data and N testing data
 """
@@ -667,14 +811,14 @@ class Model(Data):
         
         self.metric = {
             'response_corr': self._get_response_corr,
-            'mean_return': self._get_mean_return,
-            'scale_factor': self._get_scale_factor
+            'scale_factor': self._get_scale_factor,
+            'mean_return': self._get_mean_return
         }
         
         self.metric_output = {
             'response_corr': None,
-            'mean_return': None,
-            'scale_factor': None
+            'scale_factor': None,
+            'mean_return': None
         }
         #\  
                 
