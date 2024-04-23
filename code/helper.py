@@ -223,46 +223,13 @@ def export_hyperparams(hyperparam_map: dict, filename: str):
         if ".json" not in filename: filename += ".json"
         json.dump(hyperparam_map, file)
 
-def genetic_algorithm(train_df: 'DataFrame', test_df: 'DataFrame', 
-                      corr_penalty: float = 0.1, 
-                      filtered_features: list[str] = None, 
-                      generations: int = 50):
-    """
-    Genetic algorithm for feature selection in stock trading.
-    
-    Args:
-        train_df (DataFrame): Training data.
-        test_df (DataFrame): Test data.
-        corr_penalty (float): regularization penalty for decorrelation.
-        filtered_features (list[str], optional): List of filtered features.
-        generations (int): number of iterations to generate offspring signals.
-
-    Returns:
-        np.ndarray: Final selected features.
-    """
-
+def genetic_algorithm(train_df, test_df, filtered_features = None):
     def initialize_population():
-        """
-        Initialize the population of chromosomes.
-
-        Returns:
-            tuple: Initialized population and list of features.
-        """
         population = np.random.randint(2, size=(20, len(train_df.columns)-1))  # -1 to exclude response variable
         features = train_df.drop(columns=[consts.RESPONSE_NAME]).columns.tolist()
         return population, features
 
     def calculate_cost(features, chromosome):
-        """
-        Calculate the correlation coefficient for a given chromosome.
-
-        Args:
-            features (list): List of features.
-            chromosome (np.ndarray): Chromosome representing feature selection.
-
-        Returns:
-            float: Correlation coefficient.
-        """
         feature_selected = [features[i] for i in range(len(features)) if chromosome[i] == 1]
         
         x_train = train_df[feature_selected].values
@@ -284,88 +251,41 @@ def genetic_algorithm(train_df: 'DataFrame', test_df: 'DataFrame',
         model = XGBRegressor(**kwarg)
         model.fit(x_train, train_df[consts.RESPONSE_NAME])
         
-
+        # Predictions
         y_pred = model.predict(x_test)
+        
+        # Compute correlation coefficient
         correlation = np.corrcoef(y_pred, test_df[consts.RESPONSE_NAME])[0, 1]
         
         return correlation
     
     def random_combine(parents, n_offspring):
-        """
-        Combine parent signals to create offspring.
-
-        Args:
-            parents (np.ndarray): Parent signals.
-            n_offspring (int): Number of offspring to generate.
-
-        Returns:
-            np.ndarray: Offspring signals.
-        """
-
-        offspring = []; n_parents = parents.shape[0]
-        
-        # generates offspring solutions by recombining pairs of randomly selected parent solutions
+        offspring = []
+        n_parents = parents.shape[0]
         for _ in range(n_offspring):
             random_dad = parents[np.random.randint(low=0, high=n_parents - 1)]
             random_mom = parents[np.random.randint(low=0, high=n_parents - 1)]
-            
             dad_mask = np.random.randint(0, 2, random_dad.shape)
             mom_mask = np.logical_not(dad_mask)
-            
             child = np.add(np.multiply(random_dad, dad_mask), np.multiply(random_mom, mom_mask))
             offspring.append(child)
-
         return np.array(offspring)
 
     def mutate_parent(parent, n_mutations):
-        """
-        Mutate the parent chromosome.
-
-        Args:
-            parent (np.ndarray): Parent chromosome.
-            n_mutations (int): Number of mutations to perform.
-
-        Returns:
-            np.ndarray: Mutated parent chromosome.
-        """
-        
         size1 = parent.shape[0]
         for _ in range(n_mutations):
             rand1 = np.random.randint(0, size1)
             parent[rand1] = 1 - parent[rand1]  # Flipping the bit
-
         return parent
 
     def mutate_gen(parent_gen, n_mutations):
-        """
-        Mutate the entire population.
-
-        Args:
-            parent_gen (np.ndarray): list of List of previously filtered signals.
-            n_mutations (int): Number of mutations to perform.
-
-        Returns:
-            np.ndarray: Mutated population.
-        """
-
         mutated_parent_gen = []
         for parent in parent_gen:
             mutated_parent_gen.append(mutate_parent(parent, n_mutations))
-
         return np.array(mutated_parent_gen)
     
-    # Decorrelate selected signals
-    def decorrelate_signals(signals, correlation_penalty):
-        """
-        Decorrelate the selected signals.
-
-        Args:
-            signals (list): List of selected signals.
-
-        Returns:
-            list: Decorrelated signals.
-        """
-
+    def decorrelate_signals(signals):
+        # Convert signals to floating-point arrays
         signals = [signal.astype(float) for signal in signals]
         
         signal_correlation_matrix = np.corrcoef(np.array(signals))
@@ -374,27 +294,19 @@ def genetic_algorithm(train_df: 'DataFrame', test_df: 'DataFrame',
         # Penalize signals that are highly correlated with each other
         for i in range(n_signals):
             for j in range(i + 1, n_signals):
+                # Penalize correlation between signals
+                correlation_penalty = 0.1  # Adjust this penalty factor as needed
                 signals[i] -= correlation_penalty * signal_correlation_matrix[i, j] * signals[j]
                 signals[j] -= correlation_penalty * signal_correlation_matrix[j, i] * signals[i]
         
         return signals
 
-    def select_best(features, parent_gen, corr_penalty):
-        """
-        Select the best potential_solutions for next iteration.
-
-        Args:
-            features (list): List of features.
-            parent_gen (np.ndarray): List of previously filtered signals
-
-        Returns:
-            np.ndarray: Selected potential_solutions.
-        """
-        costs = np.array([calculate_cost(features, potential_solutions) for potential_solutions in parent_gen])
-        selected_parent = parent_gen[costs > 0.4] # 0.4 is the 'low-med' correlation breakpoint
+    def select_best(features, parent_gen):
+        costs = np.array([calculate_cost(features, chromosome) for chromosome in parent_gen])
+        selected_parent = parent_gen[costs > 0.4]
         
-        # Decorrelate the selected signals like a regularization method
-        selected_parent = decorrelate_signals(selected_parent, correlation_penalty = corr_penalty)
+        # Decorrelate the selected signals
+        selected_parent = decorrelate_signals(selected_parent)
         
         max_index = np.where(costs == np.amax(costs))
         feasible_features = parent_gen[max_index][0]
@@ -403,30 +315,30 @@ def genetic_algorithm(train_df: 'DataFrame', test_df: 'DataFrame',
 
     if filtered_features is not None: train_df = train_df[filtered_features + [consts.RESPONSE_NAME]]
     parent_gen, features = initialize_population()
-    overall_costs = []; overall_features = []
+    generations = 50
+    overall_costs = []
+    overall_features = []
 
     for i in range(generations):
-        parent_gen, costs, feasible_features = select_best(features, parent_gen, corr_penalty)
+        parent_gen, costs, feasible_features = select_best(features, parent_gen)
+        parent_gen = decorrelate_signals(parent_gen)
+        
         overall_costs.append(np.amax(costs))
         overall_features.append(feasible_features)
 
-        if np.amax(costs) >= 0.6: # majority voting
+        if np.amax(costs) >= 0.6:
             return feasible_features
 
-        # Checks if the number of solutions in the parent generation is too low 
-        # (e.g., due to selection pressure or premature convergence). 
-        # If so, it reinitializes the parent generation and feature list.
-        if parent_gen.shape[0] <= 1: parent_gen, features = initialize_population()
-        else: parent_gen = random_combine(parent_gen, 20)
-        
+        if parent_gen.shape[0] <= 1:
+            parent_gen, features = initialize_population()
+        else:
+            parent_gen = random_combine(parent_gen, 20)
         parent_gen = mutate_gen(parent_gen, 2)
 
-    # Final iteration: select best feature withoout penalty
-    overall_costs = np.array(overall_costs); overall_features = np.array(overall_features)
+    overall_costs = np.array(overall_costs)
+    overall_features = np.array(overall_features)
     max_index = np.where(overall_costs == np.amax(overall_costs))
-    best_features = overall_features[max_index][0]
-
-    return best_features
+    return overall_features[max_index][0]
 
 # \Generalized Methods
 
