@@ -23,6 +23,7 @@ ssl._create_default_https_context = ssl._create_unverified_context
 
 # Generalized Methods
 def get_variances(df):
+    """Get variances for the columns in the DF"""
     if consts.RESPONSE_NAME in df.columns: 
         used_df = df.drop(consts.RESPONSE_NAME, inplace = False, axis = consts.COL)
     else: used_df = df
@@ -31,6 +32,7 @@ def get_variances(df):
     return variances
 
 def get_correlations(df):
+    """Gets correlations for columsn in df. Drops response columns"""
     if consts.RESPONSE_NAME in df.columns: 
         used_df = df.drop(consts.RESPONSE_NAME, inplace = False, axis = consts.COL)
     else: used_df = df
@@ -40,6 +42,7 @@ def get_correlations(df):
     return correlations[~np.isnan(correlations)]
 
 def downloaded_all_data(output_dir: str, file_count: int) -> None:
+    """Downloads all data from google drive with data"""
     if "Credentials stuff":
         creds = None
         if os.path.exists('token.pickle'):
@@ -126,6 +129,7 @@ def reverse_binary_search(sorted_items: list, target, elimination_func):
     return right_i
 
 def extract_features_to_file(final_features: list[str], filepath: str):
+    """Writes features to a file"""
     with open(filepath, 'w') as file:
         for i, feature in enumerate(final_features):
             if i < len(final_features) - 1: feature = feature + '\n'
@@ -133,6 +137,7 @@ def extract_features_to_file(final_features: list[str], filepath: str):
     file.close()
 
 def stepwise_selection(X, y, initial_list=[], threshold_in=0.01, threshold_out = 0.05, verbose=True):
+    """Performs stepwise selection on the dataset using OLS. Internal functions to assist with this. """
     included = list(initial_list)
 
     def step(direction):
@@ -171,6 +176,7 @@ def stepwise_selection(X, y, initial_list=[], threshold_in=0.01, threshold_out =
     return included
 
 def hypothesis_test_features(df, feature1: str, feature2: str = "", *, alpha: float = .05):
+    """Hypothesis testing to determine if two features are significantly different"""
     if feature1 not in set(df.columns): return []
     if feature2 not in set(df.columns): return []
     
@@ -206,6 +212,7 @@ def hypothesis_test_features(df, feature1: str, feature2: str = "", *, alpha: fl
 
 def LASSO_feature_selection(train_df: 'DataFrame', test_df: 'DataFrame', 
                             features: list[str] = None):
+    """Feature selection using LASSO technique"""
     df = train_df.copy()
     temp_model = Model('LASSO')
     
@@ -220,11 +227,13 @@ def LASSO_feature_selection(train_df: 'DataFrame', test_df: 'DataFrame',
     return filtered_features
 
 def export_hyperparams(hyperparam_map: dict, filename: str):
+    """Writes hyperparams to a json file"""
     with open(filename, 'w') as file:
         if ".json" not in filename: filename += ".json"
         json.dump(hyperparam_map, file)
 
 def genetic_algorithm(train_df, test_df, filtered_features = None):
+    """Uses a genetic algorithm to find features. """
     def initialize_population():
         population = np.random.randint(2, size=(20, len(train_df.columns)-1))  # -1 to exclude response variable
         features = train_df.drop(columns=[consts.RESPONSE_NAME]).columns.tolist()
@@ -345,6 +354,7 @@ def genetic_algorithm(train_df, test_df, filtered_features = None):
 
 # Plot Methods
 def scatter_lot(df: pd.DataFrame, col: str, rows_count: int = -1):
+    """Just a scatter plot"""
     plt.scatter(df.index[:rows_count], df[col][:rows_count])
     plt.axhline(0, color='r', linestyle='-')
     plt.title(f'Scatter Plot of {col}')
@@ -374,7 +384,9 @@ def classification_validation_plot(data: 'Data', transform_func,
                                     train_data_count: int = 1, years_count: int = 0, 
                                     data_path: str = "", forward_dayCount: int = 0,
                                     features: list[str] = []):
-    
+    """Validation plot with classification. Splits the testing period into n_splots
+    segments and performs time series cross validation. 
+    Shows 3 graphs (one for each metric)"""
     from sklearn.model_selection import TimeSeriesSplit
     import random
 
@@ -429,6 +441,9 @@ def validation_plot(data: 'Data', model: 'Model', n_splits: int,
                     data_path: str = "", forward_dayCount: int = 0,
                     features: list[str] = [], 
                     *, color = 'grey'):
+    """Validation plot gets a time seies validation plot for each metric and plots them
+    over n_splits divisions. Saves the files into the plot directory  based on the model
+    type and number of params. """
     
     from sklearn.model_selection import TimeSeriesSplit
     import random
@@ -481,6 +496,8 @@ def validation_plot(data: 'Data', model: 'Model', n_splits: int,
         plt.show()
 
 def pca_plot(df:pd.DataFrame, num_components:int = 25):
+    """Creates a plot of the amount of variance contained in the first numComponents components
+    The solid line would be the variance if all variables contributed evenly. """
     scaler = StandardScaler()
     train_X_standardized = scaler.fit_transform(df)
 
@@ -623,6 +640,7 @@ class Data:
         return dfs
 
     def transform_col(self, name: str, *, col_name: str, transform_func: 'Function') -> None:
+        """Applies the transforming function to all columns. """
         if self.train_df is not None:
             self.saved_column[name + "_train"] = pd.Series(self.train_df[col_name])
             self.train_df.loc[:, col_name] = self.train_df[col_name].apply(transform_func)
@@ -635,6 +653,7 @@ class Data:
         return
     
     def reverse_transform_col(self, name: str, *, col_name: str) -> None:
+        """Same as transform col but in reverse"""
         if (self.train_df is not None) and (name + "_train" in self.saved_column):
             self.train_df.loc[:, col_name] = self.saved_column[name + "_train"]
             del self.saved_column[name + "_train"]
@@ -646,6 +665,7 @@ class Data:
         return
 
     def find_high_corr(self, threshold: float) -> dict:
+        """Finds the highest correlated columns. Does not drop the columns"""
         df = self.train_df
         if consts.RESPONSE_NAME in set(self.train_df.columns): 
             df = self.train_df.drop(consts.RESPONSE_NAME, axis=consts.COL, inplace=False)
@@ -664,6 +684,7 @@ class Data:
         return high_corr_dict
 
     def plot_high_corr(self, name: str):
+        """Plots the percentage of column pairs that are over a given threshold of correlation. """
         df = self.train_df
         num_high_corr = {}; thresholds = [i/10 for i in range(1, 10)]
 
@@ -686,6 +707,7 @@ class Data:
         plt.show()
 
     def detach_highly_correlated_features(self, threshold: float = .8) -> None:
+        """Drops the highly correlated feature pairs"""
         removable_features = []
 
         highCorr_features_map = self.find_high_corr(threshold)
@@ -707,6 +729,7 @@ class Data:
         return answer_df if axis == 0 else answer_df.T
     
     def _removed_id(self, df: 'DataFrame', id_colname: str) -> None:
+        """Cleans the eqid from the data. This column is not used for predicting"""
         if id_colname not in df.columns: return
         return df.drop(id_colname, inplace=False, axis = consts.COL)
     
@@ -722,6 +745,7 @@ class Data:
         except FileNotFoundError: print(f"The directory {data_path} does not exist.")
     
     def _init_sorted_file_datetimes(self) -> list[datetime]:
+        """Sorts file names for faster lookup and filtering"""
         answers = []
         
         for file_name in self.sorted_file_names:
@@ -970,6 +994,7 @@ class Model(Data):
             return
         
         def remove_metric(self, name: str = "") -> None:
+            """Removes a metric from the model's stored metrics"""
             if name == "":
                 all_names = list(self.metric.keys())
                 for name in all_names:
@@ -1137,10 +1162,12 @@ class Model(Data):
             return predicted_y_list
         
         def _reset_metric_output(self):
+            """Resets the models stored metric values"""
             for metric_name in self.metric_output.keys():
                 self.metric_output[metric_name] = None
         
         def _update_metric_output(self, predict_actual_pairs: list[list], verbose = True):
+            """Updates the models stored metric values"""
             for metric_name, metric_function in self.metric.items():
                 metric_outputs = []
                 
