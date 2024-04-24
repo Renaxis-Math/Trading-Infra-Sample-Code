@@ -126,7 +126,7 @@ def reverse_binary_search(sorted_items: list, target, elimination_func):
     return right_i
 
 def extract_features_to_file(final_features: list[str], filepath: str):
-    with open(filepath, 'w') as file:
+    with open(consts.FEATURE_PATH + filepath, 'w') as file:
         for i, feature in enumerate(final_features):
             if i < len(final_features) - 1: feature = feature + '\n'
             file.write(feature)
@@ -224,18 +224,44 @@ def export_hyperparams(hyperparam_map: dict, filename: str):
         if ".json" not in filename: filename += ".json"
         json.dump(hyperparam_map, file)
 
-def genetic_algorithm(train_df, test_df, filtered_features = None):
+def genetic_algorithm(train_df: 'DataFrame', test_df: 'DataFrame', 
+                      filtered_features: list[str] = None, generations: int = 50):
+
     def initialize_population():
+        """
+        Initialize the population of decisions.
+
+        Returns:
+            tuple: Tuple containing the initialized population and list of features.
+
+        This function randomly generates a population of binary decisions representing feature selections.
+        Each decision indicates whether a feature is selected (1) or not selected (0). It also returns a list
+        of feature names for reference.
+        """        
         population = np.random.randint(2, size=(20, len(train_df.columns)-1))  # -1 to exclude response variable
         features = train_df.drop(columns=[consts.RESPONSE_NAME]).columns.tolist()
         return population, features
 
-    def calculate_cost(features, chromosome):
-        feature_selected = [features[i] for i in range(len(features)) if chromosome[i] == 1]
-        
+    def calculate_cost(features: list[str], decision: list[int]):
+        """
+        Calculate the cost (fitness) of a decision.
+
+        Args:
+            features (list): List of feature names.
+            decision (numpy.ndarray): Binary array representing a decision.
+
+        Returns:
+            float: Correlation coefficient between predicted and actual values.
+
+        This function calculates the cost (fitness) of a decision by training an XGBoost model on the training
+        dataset using the selected features and evaluating its performance on the test dataset. The cost is
+        measured as the correlation coefficient between predicted and actual values.
+        """
+        feature_selected = [features[i] for i in range(len(features)) if decision[i] == 1]
+
         x_train = train_df[feature_selected].values
         x_test = test_df[feature_selected].values
-        
+
         filename = "Hoang_hyperparams"
         with open(filename, 'r') as file: hyperparam_dict = json.load(file)
         kwarg = {"random_state": 0,
@@ -247,99 +273,167 @@ def genetic_algorithm(train_df, test_df, filtered_features = None):
                 "eval_metric": sklearn.metrics.mean_absolute_error,
                 "learning_rate": 0.01, # because hyperparam_dict["ccp_alpha"] has 2 decimals
                 }
-        
+
         from xgboost import XGBRegressor
         model = XGBRegressor(**kwarg)
         model.fit(x_train, train_df[consts.RESPONSE_NAME])
-        
+
         # Predictions
         y_pred = model.predict(x_test)
-        
+
         # Compute correlation coefficient
         correlation = np.corrcoef(y_pred, test_df[consts.RESPONSE_NAME])[0, 1]
-        
+
         return correlation
-    
-    def random_combine(parents, n_offspring):
-        offspring = []
-        n_parents = parents.shape[0]
+
+    def random_combine(parents: list[int], n_offspring: int):
+        """
+        Perform random crossover to create offspring.
+
+        Args:
+            parents (numpy.ndarray): Array of parent decisions.
+            n_offspring (int): Number of offspring to generate.
+
+        Returns:
+            numpy.ndarray: Array of offspring decisions.
+
+        This function performs random crossover between pairs of parent decisions to generate offspring.
+        It randomly selects bits from each parent to create new combinations.
+        """
+        offspring = []; n_parents = parents.shape[0]
+
+        # generates offsprings by performing crossover between randomly selected parents
         for _ in range(n_offspring):
             random_dad = parents[np.random.randint(low=0, high=n_parents - 1)]
             random_mom = parents[np.random.randint(low=0, high=n_parents - 1)]
+    
             dad_mask = np.random.randint(0, 2, random_dad.shape)
             mom_mask = np.logical_not(dad_mask)
+
             child = np.add(np.multiply(random_dad, dad_mask), np.multiply(random_mom, mom_mask))
             offspring.append(child)
+
         return np.array(offspring)
 
-    def mutate_parent(parent, n_mutations):
+    def mutate_parent(parent: list[int], n_mutations: int):
+        """
+        Mutate a parent decision.
+
+        Args:
+            parent (numpy.ndarray): Parent decision to mutate.
+            n_mutations (int): Number of mutations to perform.
+
+        Returns:
+            numpy.ndarray: Mutated parent decision.
+
+        This function randomly mutates a parent decision by flipping a specified number of bits.
+        """
         size1 = parent.shape[0]
         for _ in range(n_mutations):
             rand1 = np.random.randint(0, size1)
             parent[rand1] = 1 - parent[rand1]  # Flipping the bit
         return parent
 
-    def mutate_gen(parent_gen, n_mutations):
+    def mutate_gen(parent_gen: list[int], n_mutations: int):
+        """
+        Mutate a generation of decisions.
+
+        Args:
+            parent_gen (numpy.ndarray): Array of parent decisions.
+            n_mutations (int): Number of mutations to perform for each decision.
+
+        Returns:
+            numpy.ndarray: Array of mutated parent decisions.
+
+        This function mutates each decision in a generation by calling the `mutate_parent` function.
+        """
         mutated_parent_gen = []
         for parent in parent_gen:
             mutated_parent_gen.append(mutate_parent(parent, n_mutations))
         return np.array(mutated_parent_gen)
-    
-    def decorrelate_signals(signals):
-        # Convert signals to floating-point arrays
+
+    def decorrelate_signals(signals: list[list[int]], correlation_penalty: int = 0.1):   
+        """
+        Decorrelate signals to reduce redundancy.
+
+        Args:
+            signals (list): List of signal arrays.
+
+        Returns:
+            list: List of decorrelated signal arrays.
+
+        This function decorrelates signals to reduce redundancy among selected features. It penalizes signals
+        that are highly correlated with each other by subtracting a portion of one signal from the other.
+        """
         signals = [signal.astype(float) for signal in signals]
-        
+
         signal_correlation_matrix = np.corrcoef(np.array(signals))
         n_signals = len(signals)
-        
+
         # Penalize signals that are highly correlated with each other
         for i in range(n_signals):
             for j in range(i + 1, n_signals):
                 # Penalize correlation between signals
-                correlation_penalty = 0.1  # Adjust this penalty factor as needed
                 signals[i] -= correlation_penalty * signal_correlation_matrix[i, j] * signals[j]
                 signals[j] -= correlation_penalty * signal_correlation_matrix[j, i] * signals[i]
-        
+
         return signals
 
-    def select_best(features, parent_gen):
-        costs = np.array([calculate_cost(features, chromosome) for chromosome in parent_gen])
-        selected_parent = parent_gen[costs > 0.4]
-        
+    def select_best(features: list[int], parent_gen: list[int]):
+        """
+        Select the best-performing decisions.
+
+        Args:
+            features (list): List of feature names.
+            parent_gen (numpy.ndarray): Array of parent decisions.
+
+        Returns:
+            tuple: Tuple containing selected parent decisions, their costs, and feasible features.
+
+        This function evaluates the performance of each decision in the population and selects the best-performing
+        ones based on a threshold. It also decorrelates the selected signals to reduce redundancy.
+        """
+        costs = np.array([calculate_cost(features, decision) for decision in parent_gen])
+        selected_parent = parent_gen[costs > 0.4] # pick off-springs by majority-voting
+
         # Decorrelate the selected signals
         selected_parent = decorrelate_signals(selected_parent)
-        
+
         max_index = np.where(costs == np.amax(costs))
         feasible_features = parent_gen[max_index][0]
-        
+
         return selected_parent, costs, feasible_features
 
     if filtered_features is not None: train_df = train_df[filtered_features + [consts.RESPONSE_NAME]]
-    parent_gen, features = initialize_population()
-    generations = 50
-    overall_costs = []
-    overall_features = []
 
+    parent_gen, features = initialize_population()
+    overall_costs = []; overall_features = []
     for i in range(generations):
         parent_gen, costs, feasible_features = select_best(features, parent_gen)
         parent_gen = decorrelate_signals(parent_gen)
-        
+
+        # tracks the best-performing features and their associated cost across generations, 
+        # terminating the genetic algorithm early if a sufficiently high fitness is achieved.
         overall_costs.append(np.amax(costs))
         overall_features.append(feasible_features)
+        if np.amax(costs) >= 0.6: return feasible_features
 
-        if np.amax(costs) >= 0.6:
-            return feasible_features
-
-        if parent_gen.shape[0] <= 1:
-            parent_gen, features = initialize_population()
-        else:
-            parent_gen = random_combine(parent_gen, 20)
+        # controls the population evolution: 
+            # if the population size is insufficient, 
+                # initiates either population reinitialization 
+            # else: 
+            #   generate new individuals through combination, 
+            #   followed by applying mutations to maintain genetic diversity.
+        if parent_gen.shape[0] <= 1: parent_gen, features = initialize_population()
+        else: parent_gen = random_combine(parent_gen, 20)
         parent_gen = mutate_gen(parent_gen, 2)
 
     overall_costs = np.array(overall_costs)
     overall_features = np.array(overall_features)
     max_index = np.where(overall_costs == np.amax(overall_costs))
-    return overall_features[max_index][0]
+    best_feature = overall_features[max_index][0]
+
+    return best_feature
 
 # \Generalized Methods
 
@@ -409,19 +503,20 @@ def classification_validation_plot(data: 'Data', transform_func,
         for metric in test_metrics.keys():
             test_metrics[metric].append(model.metric_output[metric])
 
-    for metric in model.metric.keys():
-        plt.figure(figsize=(10, 6))
-        plt.plot(metrics[metric], \
-                 label=f'Validation')
-        plt.plot(test_metrics[metric], label='Test')
-        
-        plt.title(f'{metric} over time of {model.model_type} model with {len(features)} features')
-        
-        plt.xlabel('Time')
-        plt.ylabel(metric)
+    # No plots because we're doing feature selection, so a plot can cause misunderstanding
 
-        plt.legend()
-        plt.show()
+    #     plt.figure(figsize=(10, 6))
+    #     plt.plot(metrics[metric], \
+    #              label=f'Validation')
+    #     plt.plot(test_metrics[metric], label='Test')
+        
+    #     plt.title(f'{metric} over time with Random Forests model.')
+        
+    #     plt.xlabel('Time')
+    #     plt.ylabel(metric)
+
+    #     plt.legend()
+    #     plt.show()
     
 def validation_plot(data: 'Data', model: 'Model', n_splits: int, 
                     test_start_yyyymmdd: str, backward_dayCount: int = 1, 
@@ -477,7 +572,7 @@ def validation_plot(data: 'Data', model: 'Model', n_splits: int,
         plt.ylabel(metric)
 
         plt.legend()
-        plt.savefig(f"./plots/{metric}-{model.model_type}-{len(features)}")
+        plt.savefig(consts.PLOT_PATH + f"{metric}-{model.model_type}-{len(features)}")
         plt.show()
 
 def pca_plot(df:pd.DataFrame, num_components:int = 25):
@@ -682,7 +777,7 @@ class Data:
         plt.ylabel('Number of High Correlations')
         plt.grid(True)
         
-        plt.savefig(f'./plots/{name}.png')
+        plt.savefig(consts.PLOT_PATH + f'{name}.png')
         plt.show()
 
     def detach_highly_correlated_features(self, threshold: float = .8) -> None:

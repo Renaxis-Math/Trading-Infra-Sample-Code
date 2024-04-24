@@ -9,6 +9,8 @@ ROW = 0
 COL = 1
 CV = 10
 ID = 'eqid'
+FEATURE_PATH = "./features/"
+PLOT_PATH = "./plots/"
 
 # RYAN
 RAW_DATA_PATH_RYAN = "../../clinicDataCopy/"
