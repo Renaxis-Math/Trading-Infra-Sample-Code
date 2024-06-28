@@ -1,6 +1,4 @@
-# Clinic
-
-**Note to Scott:**  This README file will explain what each file does in our repository.  The key takeaways and our conclusions will be in our final report. The code should be able to run if there is access to the data but we realize that in a meeting you mentioned that you wanted to see documented source code so you could see which algorithms we used to experiment in your own research environment.  Some of the files in the repo are just for getting the drive download to work and I will omit the explanation. 
+This README file will explain what each file does in our repository.  The key takeaways and our conclusions will be in our final report. The code should be able to run if there is access to the data but we realize that in a meeting you mentioned that you wanted to see documented source code so you could see which algorithms we used to experiment in your own research environment.  Some of the files in the repo are just for getting the drive download to work and I will omit the explanation. 
 
 # Explanation of useful file: 
 
